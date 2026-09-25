@@ -284,7 +284,6 @@ const HZ = 60, DT = 1 / HZ, TICK_MS = 1000 / HZ;
 const CFG = {
   // Geometry in logical units. The board is always 1000×1000; screen size only scales it.
   LANE_H: [160, 240, 320, 400],   // half-size of lanes 0 (inner) … 3 (outer)
-  LANE_RC0: 50,                   // TUNABLE inner-lane corner radius (outer lanes are parallel offsets)
   STRETCH: 0,                     // extra half-height: 0 = square board; portrait phones stretch it into a tall rectangle
   GAP_W: 100,                     // TUNABLE width of the cross-shaped gaps in the lane dividers
   HIT_LEN: 34,                    // TUNABLE head-on contact distance, centre to centre
@@ -320,6 +319,8 @@ const CFG = {
   // Endless: difficulty climbs Easy → Medium → Difficult → Hell on its own
   ENDLESS_LEVEL_S: 25,            // TUNABLE active seconds per level
   ENDLESS_BPM_MAX: 196,           // TUNABLE tempo cap after the ladder ends
+  WARP_S: [0.95, 1.85, 3.0],      // TUNABLE Endless level-up warp: old map gone · new map in · play resumes (s)
+  WARP_WILD_LEVELS: 5,            // TUNABLE levels until new maps reach full strangeness
   // Gems: random layouts per lane, random refills, random pop-ups
   GEM_MIN: [6, 8, 10, 12],        // TUNABLE gems per lane layout (plus 0–GEM_VAR-1 extra)
   GEM_VAR: 5,
@@ -357,22 +358,23 @@ const ENDLESS = [
 // d and d+1; gaps 0 N, 1 E, 2 S, 3 W). Every divider keeps at least one open gap.
 // goal: markers N | clear (all four lanes) | survive S seconds | dodges N (passes + escapes).
 // Level 1 has no crash cars at all; tempo and threats climb gently from there. Every attempt
-// gets a random track (corner shape, colour, walled doors); doors = most doors that may be walled.
+// gets a random track (shape, colour, walled doors); doors = most doors that may be walled;
+// wild = how strange the shape may be (0 = the classic rounded square).
 const LEVELS = [
-  { name: 'Warm-Up', tier: 0, bpm: 70, fleet: [], doors: 0, goal: { t: 'markers', n: 40 } },
-  { name: 'First Rival', tier: 0, bpm: 76, fleet: ['chaser'], doors: 0, goal: { t: 'survive', n: 25 } },
-  { name: 'Gem Rush', tier: 0, bpm: 82, fleet: ['chaser'], doors: 0, goal: { t: 'markers', n: 80 } },
-  { name: 'Detour', tier: 0, bpm: 88, fleet: ['chaser'], doors: 2, goal: { t: 'markers', n: 100 } },
-  { name: 'Clean Sweep', tier: 1, bpm: 98, fleet: ['chaser'], doors: 1, goal: { t: 'clear' } },
-  { name: 'Crossfire', tier: 1, bpm: 106, fleet: ['chaser', 'splitter'], doors: 2, goal: { t: 'survive', n: 35 } },
-  { name: 'Close Calls', tier: 1, bpm: 112, fleet: ['interceptor'], doors: 3, goal: { t: 'dodges', n: 4 } },
-  { name: 'Gauntlet', tier: 1, bpm: 118, fleet: ['chaser', 'splitter'], doors: 4, goal: { t: 'markers', n: 160 } },
-  { name: 'Endurance', tier: 2, bpm: 128, fleet: ['interceptor'], doors: 3, goal: { t: 'survive', n: 45 } },
-  { name: 'Full Circuit', tier: 2, bpm: 134, fleet: ['interceptor', 'pacer'], doors: 4, goal: { t: 'clear' } },
-  { name: 'Last Doors', tier: 3, bpm: 146, fleet: ['interceptor', 'pacer'], doors: 6, goal: { t: 'survive', n: 50 } },
-  { name: 'Overdrive', tier: 3, bpm: 158, fleet: ['interceptor', 'pacer', 'splitter'], doors: 4, goal: { t: 'markers', n: 240 } },
+  { name: 'Warm-Up', tier: 0, bpm: 70, fleet: [], doors: 0, wild: 0, goal: { t: 'markers', n: 40 } },
+  { name: 'First Rival', tier: 0, bpm: 76, fleet: ['chaser'], doors: 0, wild: 0, goal: { t: 'survive', n: 25 } },
+  { name: 'Gem Rush', tier: 0, bpm: 82, fleet: ['chaser'], doors: 0, wild: 0.2, goal: { t: 'markers', n: 80 } },
+  { name: 'Detour', tier: 0, bpm: 88, fleet: ['chaser'], doors: 2, wild: 0.3, goal: { t: 'markers', n: 100 } },
+  { name: 'Clean Sweep', tier: 1, bpm: 98, fleet: ['chaser'], doors: 1, wild: 0.4, goal: { t: 'clear' } },
+  { name: 'Crossfire', tier: 1, bpm: 106, fleet: ['chaser', 'splitter'], doors: 2, wild: 0.5, goal: { t: 'survive', n: 35 } },
+  { name: 'Close Calls', tier: 1, bpm: 112, fleet: ['interceptor'], doors: 3, wild: 0.6, goal: { t: 'dodges', n: 4 } },
+  { name: 'Gauntlet', tier: 1, bpm: 118, fleet: ['chaser', 'splitter'], doors: 4, wild: 0.7, goal: { t: 'markers', n: 160 } },
+  { name: 'Endurance', tier: 2, bpm: 128, fleet: ['interceptor'], doors: 3, wild: 0.8, goal: { t: 'survive', n: 45 } },
+  { name: 'Full Circuit', tier: 2, bpm: 134, fleet: ['interceptor', 'pacer'], doors: 4, wild: 0.9, goal: { t: 'clear' } },
+  { name: 'Last Doors', tier: 3, bpm: 146, fleet: ['interceptor', 'pacer'], doors: 6, wild: 1, goal: { t: 'survive', n: 50 } },
+  { name: 'Overdrive', tier: 3, bpm: 158, fleet: ['interceptor', 'pacer', 'splitter'], doors: 4, wild: 1, goal: { t: 'markers', n: 240 } },
 ];
-const HUE0 = 352;
+const HUE0 = 262;                                                    // default track accent (violet)
 const POWERUPS = {
   shield: { name: 'Shield', desc: 'survive one head-on', color: '#7DF9FF' },
   magnet: { name: 'Magnet', desc: 'grab gems from the lanes beside you', color: '#FF2A6D' },
@@ -443,22 +445,28 @@ function randomSeed() {
   try { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] & 0x3fffffff; } catch (e) { return (Math.random() * 0x40000000) >>> 0; }
 }
 
+
 /* =============================== GEOMETRY =============================== */
-// Progress p (0–1) runs clockwise from the North gap: N=0, E=.25, S=.5, W=.75.
+// Progress p (0–1) runs clockwise from the North door: N=0, E=.25, S=.5, W=.75.
 // Player p decreases (counter-clockwise); fleet p increases. p is stored unwrapped.
+//
+// A track shape is two convex outlines: the inner wall (around the centre pad) and the outer
+// wall. Each is built from four corner styles. Every lane and wall between them is a Minkowski
+// blend (1−t)·inner ⊕ t·outer, so lanes are always convex, never cross, and are equally wide in
+// every direction. The doors are the blended North/East/South/West points, so they always line
+// up across lanes. Within each quarter (door to door) p follows arc length, so doors stay exactly
+// one beat apart on any shape. Portrait stretch adds straight vertical sides at the E/W doors.
 const CX = 500, CY = 500;
-const H = CFG.LANE_H;
-const rcFor = h => Math.max(0, CFG.LANE_RC0 + h - H[0]);
-const perimOf = h => { const r = rcFor(h); return 8 * (h - r) + 4 * CFG.STRETCH + 2 * Math.PI * r; };
-let RC, PERIM, HIT_P, HIT_V;
-// Maps may change the corner radius (square ↔ round); lane half-sizes and gap positions never move.
-// Stretch keeps every quarter (door to door) the same length, so doors stay exactly one beat apart.
-function setGeometry(rc0, st = CFG.STRETCH) {
-  CFG.LANE_RC0 = clamp(rc0, 0, 110); CFG.STRETCH = Math.max(0, st || 0);
-  RC = H.map(rcFor); PERIM = H.map(perimOf);
-  HIT_P = PERIM.map(P => CFG.HIT_LEN / P); HIT_V = HIT_P.map(x => x * CFG.V_MARGIN);
-}
-const WALL_H = [H[0] - 40, (H[0] + H[1]) / 2, (H[1] + H[2]) / 2, (H[2] + H[3]) / 2, H[3] + 40];
+const H = CFG.LANE_H;                                   // level of each lane
+const H_IN = 120, H_OUT = 440;                          // levels of the inner and outer walls
+const WALL_H = [H_IN, (H[0] + H[1]) / 2, (H[1] + H[2]) / 2, (H[2] + H[3]) / 2, H_OUT];
+const EDGE_H = 476;                                     // the board's edge (slab and rim)
+const NPHI = 720;                                       // directions for support functions
+const PHI_C = new Float64Array(NPHI), PHI_S = new Float64Array(NPHI);
+for (let j = 0; j < NPHI; j++) { const f = 2 * Math.PI * j / NPHI; PHI_C[j] = Math.cos(f); PHI_S[j] = Math.sin(f); }
+const BASE_PERIM = H.map(h => { const r = 50 + h - 160; return 8 * (h - r) + 2 * Math.PI * r; });   // classic square board (gem density reference)
+let PERIM, HIT_P, HIT_V, GEO = null;
+const GEO_CACHE = new Map();
 const GAP_NAMES = ['North', 'East', 'South', 'West'];
 const LANE_NAMES = ['inner lane', 'second lane', 'third lane', 'outer lane'];
 const mod1 = x => x - Math.floor(x);
@@ -467,42 +475,178 @@ const clampLane = l => l < 0 ? 0 : l > 3 ? 3 : l;
 const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
 const gapIdx = g => ((Math.round(g * 4) % 4) + 4) % 4;
 
+// Shapes are plain data (sims are cloned): { i: outline, o: outline, k: key }.
+// outline = { a, b (half-width, half-height), c: [TR, BR, BL, TL] corner styles }.
+// Corner style [kind, value]: r = round (radius), c = chamfer (leg), s = squircle (exponent),
+// d = diamond (straight from door to door, tips rounded).
+function mkShape(i, o) {
+  const ks = ol => ol.a + 'x' + ol.b + ':' + ol.c.map(c => c[0] + (Math.round(c[1] * 100) / 100)).join(',');
+  return { i, o, k: ks(i) + '|' + ks(o) };
+}
+const rep4 = c => [c, c, c, c];
+// The classic board: rounded squares whose corners grow outward (rc = inner-lane corner radius).
+const roundedSquare = rc => mkShape({ a: 120, b: 120, c: rep4(['r', Math.max(8, rc - 40)]) }, { a: 440, b: 440, c: rep4(['r', Math.min(440, rc + 280)]) });
+const CLASSIC = roundedSquare(50);
+
+function arcPts(out, cx, cy, r, a0, a1, n) { for (let i = 1; i < n; i++) { const a = a0 + (a1 - a0) * i / n; out.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]); } }
+// One corner (top-right quadrant, screen y down) from the North door to the East door: it
+// leaves the North door heading right and reaches the East door heading down, so doors always
+// face straight along the axes and the four quadrants join smoothly.
+function cornerChain(a, b, st) {
+  const k = st[0], v = st[1], pts = [[0, -b]];
+  if (k === 'r') { const r = clamp(v, 8, Math.min(a, b)); pts.push([a - r, -b]); arcPts(pts, a - r, -b + r, r, -Math.PI / 2, 0, 24); pts.push([a, -b + r]); pts.push([a, 0]); }
+  else if (k === 'c') {
+    const c = clamp(v, 30, Math.min(a, b) - 20), f = 16, e = f * Math.tan(Math.PI / 8);
+    pts.push([a - c - e, -b]); arcPts(pts, a - c - e, -b + f, f, -Math.PI / 2, -Math.PI / 4, 6); pts.push([a - c + .2929 * f, -b + .2929 * f]);
+    pts.push([a - .2929 * f, -b + c - .2929 * f]); arcPts(pts, a - f, -b + c + e, f, -Math.PI / 4, 0, 6); pts.push([a, -b + c + e]); pts.push([a, 0]);
+  } else if (k === 's') { for (let i = 1; i < 40; i++) { const f = Math.PI / 2 * (1 - i / 40); pts.push([a * Math.pow(Math.cos(f), 2 / v), -b * Math.pow(Math.sin(f), 2 / v)]); } pts.push([a, 0]); }
+  else {                                                   // diamond with rounded tips
+    const f = 28, rt = Math.SQRT2;
+    pts[0] = [0, -b + f * (rt - 1)]; arcPts(pts, 0, -b + f * rt, f, -Math.PI / 2, -Math.PI / 4, 6); pts.push([f / rt, -b + f / rt]);
+    pts.push([a - f / rt, -f / rt]); arcPts(pts, a - f * rt, 0, f, -Math.PI / 4, 0, 6); pts.push([a - f * (rt - 1), 0]);
+  }
+  return pts;
+}
+// Four chains, clockwise: TR (N→E), BR (E→S), BL (S→W), TL (W→N); each mirrors the canonical corner.
+function outlineChains(ol) {
+  const ch = [];
+  for (let q = 0; q < 4; q++) {
+    const p = cornerChain(ol.a, ol.b, ol.c[q]), sx = q < 2 ? 1 : -1, sy = q === 1 || q === 2 ? -1 : 1;
+    const m = p.map(([x, y]) => [x * sx + 0, y * sy + 0]);
+    ch.push(q === 1 || q === 3 ? m.reverse() : m);
+  }
+  return ch;
+}
+// Edges of a chain with their headings (radians, clockwise from +x), normalised into quadrant q.
+function chainEdges(ch, q) {
+  const E = [];
+  for (let i = 0; i + 1 < ch.length; i++) {
+    const dx = ch[i + 1][0] - ch[i][0], dy = ch[i + 1][1] - ch[i][1];
+    if (Math.abs(dx) + Math.abs(dy) < 1e-9) continue;
+    let a = Math.atan2(dy, dx); if (a < q * Math.PI / 2 - 1e-7) a += 2 * Math.PI;
+    E.push([dx, dy, a]);
+  }
+  return E;
+}
+function supportOf(chains) {
+  const h = new Float64Array(NPHI).fill(-1e9);
+  for (const ch of chains) for (const [x, y] of ch) for (let j = 0; j < NPHI; j++) { const d = x * PHI_C[j] + y * PHI_S[j]; if (d > h[j]) h[j] = d; }
+  return h;
+}
+function buildGeo(sh, st, key) {
+  const ci = outlineChains(sh.i), co = outlineChains(sh.o);
+  const G = { key, sh, st, ci, co, ei: ci.map(chainEdges), eo: co.map(chainEdges), hin: supportOf(ci), hout: supportOf(co), curves: new Map() };
+  G.PERIM = H.map(h => curveOf(G, h).len);
+  G.HIT_P = G.PERIM.map(P => CFG.HIT_LEN / P); G.HIT_V = G.HIT_P.map(x => x * CFG.V_MARGIN);
+  return G;
+}
+// Every level h has one cached curve: points, segment headings, outward normals and arc length,
+// with the index of each door. Levels past the outer wall are offset along its normals.
+function curveOf(G, h) {
+  let c = G.curves.get(h);
+  if (c) return c;
+  const st = G.st, quarters = [];
+  if (h <= H_OUT) {
+    const t = (h - H_IN) / (H_OUT - H_IN), u = 1 - t;
+    for (let q = 0; q < 4; q++) {                 // Minkowski blend of the two quadrant chains: merge edges by heading
+      const A = G.ei[q], B = G.eo[q];
+      let x = u * G.ci[q][0][0] + t * G.co[q][0][0], y = u * G.ci[q][0][1] + t * G.co[q][0][1];
+      const pts = [[x, y]];
+      let i = 0, j = 0;
+      while (i < A.length || j < B.length) {
+        const useA = j >= B.length || (i < A.length && A[i][2] <= B[j][2]);
+        const e = useA ? A[i++] : B[j++], k = useA ? u : t;
+        if (k * (Math.abs(e[0]) + Math.abs(e[1])) < 1e-6) continue;
+        x += e[0] * k; y += e[1] * k; pts.push([x, y]);
+      }
+      quarters.push(pts);
+    }
+  } else {
+    const oc = curveOf(G, H_OUT), d = h - H_OUT;
+    for (let q = 0; q < 4; q++) {
+      const pts = [];
+      for (let i = oc.qi[q]; i <= oc.qi[q + 1]; i++) { const k = i % oc.n; pts.push([oc.px[k] + oc.vx[k] * d, oc.py[k] + oc.vy[k] * d]); }
+      quarters.push(pts);
+    }
+  }
+  if (h <= H_OUT && st > 0) {                      // stretch: shift the top and bottom halves apart, straight sides at E/W
+    const sh = (pts, dy) => pts.map(([x, y]) => [x, y + dy]);
+    const q0 = sh(quarters[0], -st), q1 = sh(quarters[1], st), q2 = sh(quarters[2], st), q3 = sh(quarters[3], -st);
+    const xe = q0[q0.length - 1][0], xw = q2[q2.length - 1][0];
+    q0.push([xe, 0]); q1.unshift([xe, 0]); q2.push([xw, 0]); q3.unshift([xw, 0]);
+    quarters.splice(0, 4, q0, q1, q2, q3);
+  }
+  // one closed polyline; qi = index of each door (N, E, S, W, then N again at n)
+  const P = [], qi = [];
+  for (let q = 0; q < 4; q++) { qi.push(P.length); const Q = quarters[q]; for (let i = 0; i < Q.length - 1; i++) P.push(Q[i]); }
+  const n = P.length; qi.push(n);
+  const px = new Float64Array(n), py = new Float64Array(n), sx = new Float64Array(n), sy = new Float64Array(n), vx = new Float64Array(n), vy = new Float64Array(n), cum = new Float64Array(n + 1);
+  for (let i = 0; i < n; i++) { px[i] = P[i][0]; py[i] = P[i][1]; }
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n, dx = px[j] - px[i], dy = py[j] - py[i], L = Math.hypot(dx, dy);
+    sx[i] = L > 0 ? dx / L : 1; sy[i] = L > 0 ? dy / L : 0; cum[i + 1] = cum[i] + L;
+  }
+  for (let i = 0; i < n; i++) {                    // vertex normals (outward), for offsets
+    const a = (i + n - 1) % n; let ux = sx[a] + sx[i], uy = sy[a] + sy[i]; const L = Math.hypot(ux, uy) || 1; ux /= L; uy /= L;
+    const cs = Math.max(.35, ux * sx[i] + uy * sy[i]); vx[i] = uy / cs; vy[i] = -ux / cs;
+  }
+  const qs = [], ql = [];
+  for (let k = 0; k < 4; k++) { qs.push(cum[qi[k]]); ql.push(cum[qi[k + 1]] - cum[qi[k]]); }
+  c = { n, px, py, sx, sy, vx, vy, cum, qi, qs, ql, len: cum[n] };
+  G.curves.set(h, c);
+  return c;
+}
+function setGeometry(sh, st = CFG.STRETCH) {
+  st = Math.max(0, st || 0);
+  const key = sh.k + '|' + st;
+  let G = GEO_CACHE.get(key);
+  if (!G) {
+    G = buildGeo(sh, st, key); GEO_CACHE.set(key, G);
+    if (GEO_CACHE.size > 16) GEO_CACHE.delete(GEO_CACHE.keys().next().value);
+  }
+  GEO = G; CFG.STRETCH = st; PERIM = G.PERIM; HIT_P = G.HIT_P; HIT_V = G.HIT_V;
+}
 const _pt = { x: 0, y: 0, tx: 0, ty: 0, nx: 0, ny: 0 };
-function _corner(o, cx, cy, th, rc) { const c = Math.cos(th), s = Math.sin(th); o.x = cx + rc * c; o.y = cy + rc * s; o.nx = c; o.ny = s; o.tx = -s; o.ty = c; }
-// Point on a rounded square (half-size h, corner radius rc) at progress p, relative to the centre.
-// Returns position, clockwise tangent and outward normal.
-function rsPoint(h, rc, p, o = _pt) {
-  const hy = h + CFG.STRETCH, s = h - rc, sy = hy - rc, a = Math.PI * rc / 2;
-  let d = mod1(p) * (4 * s + 4 * sy + 4 * a);
-  if (d < s) { o.x = d; o.y = -hy; o.tx = 1; o.ty = 0; o.nx = 0; o.ny = -1; return o; }
-  d -= s;
-  if (d < a) { _corner(o, s, -sy, -Math.PI / 2 + d / rc, rc); return o; }
-  d -= a;
-  if (d < 2 * sy) { o.x = h; o.y = -sy + d; o.tx = 0; o.ty = 1; o.nx = 1; o.ny = 0; return o; }
-  d -= 2 * sy;
-  if (d < a) { _corner(o, s, sy, d / rc, rc); return o; }
-  d -= a;
-  if (d < 2 * s) { o.x = s - d; o.y = hy; o.tx = -1; o.ty = 0; o.nx = 0; o.ny = 1; return o; }
-  d -= 2 * s;
-  if (d < a) { _corner(o, -s, sy, Math.PI / 2 + d / rc, rc); return o; }
-  d -= a;
-  if (d < 2 * sy) { o.x = -h; o.y = sy - d; o.tx = 0; o.ty = -1; o.nx = -1; o.ny = 0; return o; }
-  d -= 2 * sy;
-  if (d < a) { _corner(o, -s, -sy, Math.PI + d / rc, rc); return o; }
-  d -= a;
-  o.x = -s + d; o.y = -hy; o.tx = 1; o.ty = 0; o.nx = 0; o.ny = -1; return o;
+let _lc = null, _lh = NaN, _lg = null;
+// Point on level h at progress p, relative to the centre: position, clockwise tangent, outward
+// normal. The heading eases between segments over a few units so cars turn smoothly.
+function trackPoint(h, p, o = _pt) {
+  let c;
+  if (h === _lh && _lg === GEO) c = _lc; else { c = curveOf(GEO, h); _lc = c; _lh = h; _lg = GEO; }
+  const f = mod1(p) * 4, k = Math.min(3, Math.floor(f)), s = c.qs[k] + (f - k) * c.ql[k], cum = c.cum;
+  let lo = c.qi[k], hi = c.qi[k + 1];
+  while (hi - lo > 1) { const m = (lo + hi) >> 1; if (cum[m] <= s) lo = m; else hi = m; }
+  const i = lo % c.n, j = (i + 1) % c.n, seg = cum[lo + 1] - cum[lo], u = seg > 0 ? (s - cum[lo]) / seg : 0;
+  o.x = c.px[i] + (c.px[j] - c.px[i]) * u; o.y = c.py[i] + (c.py[j] - c.py[i]) * u;
+  let tx = c.sx[i], ty = c.sy[i];
+  const B = 6, d0 = u * seg, d1 = (1 - u) * seg;
+  if (d0 < B) { const a = (i + c.n - 1) % c.n, w = .5 - .5 * d0 / B; tx += (c.sx[a] - tx) * w; ty += (c.sy[a] - ty) * w; }
+  else if (d1 < B) { const w = .5 - .5 * d1 / B; tx += (c.sx[j] - tx) * w; ty += (c.sy[j] - ty) * w; }
+  const L = Math.hypot(tx, ty) || 1;
+  o.tx = tx / L; o.ty = ty / L; o.nx = o.ty; o.ny = -o.tx;
+  return o;
 }
-// Signed distance from a point (relative to centre) to a rounded square outline.
-function rsSdf(x, y, h, rc) {
-  const s = h - rc, qx = Math.abs(x) - s, qy = Math.abs(y) - (s + CFG.STRETCH);
-  return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - rc;
+const rsPoint = (h, rc, p, o) => trackPoint(h, p, o);   // legacy name
+// Level of a board point (relative to the centre): 120 = inner wall … 440 = outer wall. The
+// smallest blend that contains the point, from the two outlines' support functions.
+function levelAt(x, y) {
+  const G = GEO, st = G.st;
+  let t = -1e9;
+  for (let j = 0; j < NPHI; j++) { const s = PHI_S[j], v = (x * PHI_C[j] + y * s - st * Math.abs(s) - G.hin[j]) / (G.hout[j] - G.hin[j]); if (v > t) t = v; }
+  return H_IN + t * (H_OUT - H_IN);
 }
-// Radial tap classification against the lane the driver is in: -1 IN, 0 STAY, +1 OUT.
+// Tap classification against the lane the driver is in: -1 IN, 0 STAY, +1 OUT.
 function classifyPoint(x, y, lane) {
-  const d = rsSdf(x, y, H[lane], RC[lane]);
+  const d = levelAt(x, y) - H[lane];
   return d < -CFG.TAP_BAND ? -1 : d > CFG.TAP_BAND ? 1 : 0;
 }
-setGeometry(CFG.LANE_RC0, 0);
+// A shape is usable when the centre pad fits inside and every lane is at least 64 units wide.
+function shapeOk(sh) {
+  const hi = supportOf(outlineChains(sh.i)), ho = supportOf(outlineChains(sh.o));
+  for (let j = 0; j < NPHI; j++) if (hi[j] < 108 || ho[j] - hi[j] < 4 * 64) return false;
+  return true;
+}
+setGeometry(CLASSIC, 0);
 
 /* ============================== SIMULATION ============================== */
 const HOLD_TICKS = Math.round(CFG.HOLD_MS / TICK_MS);
@@ -512,7 +656,7 @@ const GRACE_TICKS = Math.round(CFG.GRACE_S * HZ);
 // Gems: every lane layout is random (sometimes with a 3–5 gem run for combos), cleared lanes
 // refill with a fresh random layout, and a random gem pops up every few beats. All draws use the
 // seeded RNG, so replays and ghosts stay exact. Gems never sit on a door crossing.
-const gemScale = l => PERIM[l] / (PERIM[l] - 4 * CFG.STRETCH);
+const gemScale = l => PERIM[l] / BASE_PERIM[l];
 const nearGap = p => Math.abs(wrapHalf(p * 4)) < 0.07;
 const gemFits = (S, l, p, minD) => !nearGap(p) && !S.mk[l].some(q => Math.abs(wrapHalf(q.p - p)) < minD);
 function spawnLaneGems(S, l, pop) {
@@ -536,29 +680,43 @@ function trickleGem(S) {
     if (gemFits(S, l, p, 30 / PERIM[l])) { S.mk[l].push({ p, b: S.tick }); S.left[l]++; emit(S, { t: 'gemSpawn', lane: l, p }); return; }
   }
 }
-// Random track: corner radius, colour and up to maxClosed walled doors (every divider keeps ≥ 2 open).
-function randomTrack(S, maxClosed) {
-  const rc = CFG.RC_CHOICES[rngInt(S.rng, CFG.RC_CHOICES.length)], hue = rngInt(S.rng, 360);
+// Random track shapes. wild 0 = the classic rounded square (random corner radius); higher wild
+// mixes corner styles (round, chamfer, squircle, diamond), stretches the inner outline and
+// breaks symmetry. Every candidate is checked (centre pad fits, lanes stay wide), else redrawn.
+const rngR = S => rngFloat(S.rng);
+const OUT_CORNERS = [S => ['r', 120 + rngR(S) * 320], S => ['c', 150 + rngR(S) * 150], S => ['s', 2 + rngR(S) * 2.2]];
+const IN_CORNERS = [S => ['r', rngR(S) * 120], S => ['c', 30 + rngR(S) * 60], S => ['s', 2 + rngR(S) * 2], S => ['d', 0]];
+function corners4(S, pool, wild) {
+  const mk = () => pool[rngInt(S.rng, pool.length)](S);
+  if (rngR(S) >= .8 * wild) return rep4(mk());                        // symmetric
+  const a = mk(), b = mk(), m = rngInt(S.rng, 4);                      // TR, BR, BL, TL
+  return m === 0 ? [a, b, b, a] : m === 1 ? [a, a, b, b] : m === 2 ? [a, b, a, b] : [a, b, mk(), mk()];
+}
+function randomShape(S, wild) {
+  if (!(wild > 0)) return roundedSquare(CFG.RC_CHOICES[rngInt(S.rng, CFG.RC_CHOICES.length)]);
+  for (let tries = 0; tries < 12; tries++) {
+    const ic = corners4(S, IN_CORNERS, wild), dia = ic.some(c => c[0] === 'd');
+    const grow = () => Math.round((dia ? 40 : 0) + rngR(S) * 40 * wild);
+    const sh = mkShape({ a: 120 + grow(), b: 120 + grow(), c: ic }, { a: 440, b: 440, c: corners4(S, OUT_CORNERS, wild) });
+    if (shapeOk(sh, S.st)) return sh;
+  }
+  return roundedSquare(50);
+}
+// Random track: shape, accent colour and up to maxClosed walled doors (every divider keeps ≥ 2 open).
+function randomTrack(S, maxClosed, wild = 0) {
+  const shape = randomShape(S, wild), hue = 215 + rngInt(S.rng, 106);    // blue → violet → magenta: never gem gold, rival cyan or your red
   const all = [];
   for (let d = 0; d < 3; d++) for (let q = 0; q < 4; q++) all.push([d, q]);
   rngShuffle(S.rng, all);
   const go = [0, 1, 2].map(() => [true, true, true, true]), want = maxClosed > 0 ? Math.ceil(maxClosed * (.5 + .5 * rngFloat(S.rng))) : 0;
   let closed = 0;
   for (const [d, q] of all) { if (closed >= want) break; if (go[d].filter(Boolean).length > 2) { go[d][q] = false; closed++; } }
-  return { rc, hue, go, closed };
+  return { shape, hue, go, closed };
 }
 function applyTrack(S, tr) {
-  S.rc = tr.rc; S.hue = tr.hue; S.gapOpen = tr.go;
+  S.shape = tr.shape; S.gk = tr.shape.k + '|' + S.st; S.hue = tr.hue; S.gapOpen = tr.go;
   S.vTail = CFG.V_TAIL_BEATS + 4 * tr.closed / 12;       // sparser maps need a longer fairness horizon
-  setGeometry(S.rc, S.st);
-}
-// Endless: every level-up reshapes the track at random — but only to a layout that is fair right now.
-function trackChange(S) {
-  const budget = Math.min(6, Math.max(0, Math.floor((S.level - 3) / 2)));
-  const old = { rc: S.rc, hue: S.hue, go: S.gapOpen, closed: S.gapOpen.flat().filter(o => !o).length };
-  for (let a = 0; a < 6; a++) { applyTrack(S, randomTrack(S, budget)); if (fairNow(S)) return true; }
-  applyTrack(S, old);
-  return false;
+  setGeometry(S.shape, S.st);
 }
 
 function mkDriver(lane, p, sign) {
@@ -583,7 +741,8 @@ function simCreate(o) {
     nextLevelAt: CFG.ENDLESS_LEVEL_S * HZ, change: null, grace: false, applyPending: false,
     gapOpen: [[true, true, true, true], [true, true, true, true], [true, true, true, true]],
     goal: L ? L.goal : null, won: null, lanesEver: [false, false, false, false], dodges: 0,
-    vTail: CFG.V_TAIL_BEATS, rc: 50, st: Math.max(0, o.stretch || 0), hue: HUE0, trickleAt: 0,
+    vTail: CFG.V_TAIL_BEATS, shape: CLASSIC, gk: '', st: Math.max(0, o.stretch || 0), hue: HUE0, trickleAt: 0,
+    warp: null, warpTicks: 0,
     player: mkDriver(2, 0.2, -1), enemies: [], nextId: 1,
     mk: [[], [], [], []], left: [0, 0, 0, 0], refillAt: [-1, -1, -1, -1], stem: [0, 0, 0, 0], cleared: [false, false, false, false],
     key: 0, score: 0, chain: 0, chainTick: -9999, mult: 1, bestMult: 1, peakMult: 1,
@@ -591,7 +750,7 @@ function simCreate(o) {
     firstChange: false, crashed: null, roundOver: false, roles: o.roles || null, timeline: [], ev: [],
     pu: null, puNext: CFG.PU_FIRST_S * HZ, fx: { shield: 0, magnet: 0, slow: 0, x2: 0 }, puOn: o.mode === 'endless' || (!!L && o.level >= 1),
   };
-  if (L) applyTrack(S, randomTrack(S, L.doors)); else setGeometry(S.rc, S.st);
+  if (L) applyTrack(S, randomTrack(S, L.doors, L.wild)); else applyTrack(S, { shape: CLASSIC, hue: HUE0, go: S.gapOpen, closed: 0 });
   for (let l = 0; l < 4; l++) spawnLaneGems(S, l, false);
   S.trickleAt = Math.round(CFG.GEM_TRICKLE_BEATS * beatTicks(S));
   if (S.mode === 'hunter') {
@@ -719,7 +878,8 @@ function sweptHit(A, B, HT = HIT_P) {
 function simStep(S, inputs) {
   S.ev.length = 0;
   if (S.crashed || S.roundOver || S.won) return;
-  if (CFG.LANE_RC0 !== S.rc || CFG.STRETCH !== S.st) setGeometry(S.rc, S.st);   // each sim owns its track shape
+  if (GEO.key !== S.gk) setGeometry(S.shape, S.st);   // each sim owns its track shape
+  if (S.warp) { warpStep(S, inputs); return; }
   const D = DIFFS[S.diff], P = S.player;
   for (let i = 0; i < inputs.length; i++) applyInput(S, inputs[i]);
   const humans = S.mode === 'hunter' ? [P, S.enemies[0]] : [P];
@@ -945,14 +1105,68 @@ function applyChange(S) {
   S.level = c.level; S.nextLevelAt = S.level * CFG.ENDLESS_LEVEL_S * HZ; S.nearMiss = 0;
   const st = c.step;
   if (st.tier != null) { S.diff = st.tier; S.bpm = Math.max(S.bpm, ENDLESS_TIER_BPM[st.tier]); }
-  else if (st.spawn) spawnEnemy(S, st.spawn);
   else if (st.upgrade) { const e = S.enemies.find(x => x.type === st.upgrade[0]); if (e) e.type = st.upgrade[1]; }
   else if (st.bpm) S.bpm = Math.min(CFG.ENDLESS_BPM_MAX, S.bpm + st.bpm);
-  const track = trackChange(S);
   const pts = Math.round(CFG.PTS.level * S.level * DIFFS[S.diff].mult);
   S.score += pts;
   S.timeline.push({ k: 'level', t: S.tick, v: S.level });
-  emit(S, { t: 'levelup', level: S.level, bpm: S.bpm, step: st, pts, track });
+  // Warp to a new map: the sim freezes while the old map exits and the new one drops in.
+  const W = CFG.WARP_S.map(x => Math.round(x * HZ));
+  S.warp = { t0: S.tick, swap: S.tick + W[0], go: S.tick + W[1], end: S.tick + W[2], spawn: st.spawn || null };
+  S.warpTicks += W[2];
+  S.nextLevelAt = S.level * CFG.ENDLESS_LEVEL_S * HZ + S.warpTicks;
+  setOD(S, S.player, false);
+  emit(S, { t: 'levelup', level: S.level, bpm: S.bpm, step: st, pts, warp: true });
+}
+// During a warp only presses and releases count (plus steering once the new map is showing).
+function warpStep(S, inputs) {
+  const W = S.warp, steer = S.tick >= W.go;
+  for (const e of inputs) {
+    if (e.k === 'c' && !steer) continue;
+    applyInput(S, e.k === 'd' && !steer ? { k: 'd', c: null, w: e.w } : e);
+  }
+  if (S.tick === W.swap) warpSwap(S);
+  S.tick++;
+  if (S.tick >= W.end) warpEnd(S);
+}
+// The new map: a fresh random shape and doors, new gems, and every crash car re-placed where the
+// fairness validator says you can still escape (the level's new car joins here).
+function warpSwap(S) {
+  const P = S.player, W = S.warp, olds = S.enemies.map(e => ({ id: e.id, type: e.type }));
+  if (W.spawn) olds.push({ id: S.nextId++, type: W.spawn });
+  const budget = Math.min(6, Math.max(0, Math.floor((S.level - 3) / 2))), wild = Math.min(1, (S.level - 1) / CFG.WARP_WILD_LEVELS);
+  P.cmd = null; P.queued = null; P.holdSave = null; P.changeFrom = P.lane;
+  let ok = false;
+  for (let a = 0; a < 8 && !ok; a++) {
+    applyTrack(S, randomTrack(S, a < 6 ? budget : 0, wild));
+    S.enemies = []; ok = true;
+    for (const o of olds) if (!placeEnemy(S, o.type, o.id, true)) { ok = false; break; }
+  }
+  if (!ok) { S.enemies = []; for (const o of olds) placeEnemy(S, o.type, o.id, false); }
+  for (let l = 0; l < 4; l++) { spawnLaneGems(S, l, true); S.refillAt[l] = -1; }
+  S.pu = null;
+  emit(S, { t: 'warpSwap', shape: S.shape.k });
+}
+function placeEnemy(S, type, id, strict) {
+  const P = S.player, lanes = rngShuffle(S.rng, [0, 1, 2, 3].filter(l => l !== P.lane));
+  for (const off of [0.5, 0.42, 0.58, 0.34, 0.66, 0.26, 0.74]) for (const l of lanes) {
+    const e = mkEnemy(id, type, l, P.p + off, S.tick);
+    if (S.enemies.some(o => o.lane === l && Math.abs(wrapHalf(o.p - e.p)) < 0.08)) continue;
+    S.enemies.push(e);
+    if (!strict || fairNow(S)) return e;
+    S.enemies.pop();
+  }
+  return null;
+}
+// Play resumes: every timer that was running is pushed back by the warp's length.
+function warpEnd(S) {
+  const n = S.warp.end - S.warp.t0, P = S.player;
+  S.warp = null;
+  S.trickleAt += n; S.puNext += n; S.chainTick += n;
+  for (let l = 0; l < 4; l++) if (S.refillAt[l] >= 0) S.refillAt[l] += n;
+  for (const k of PU_KINDS) if (S.fx[k]) S.fx[k] += n;
+  for (const d of [P].concat(S.enemies)) { d.holdAt += n; d.lastCommit += n; d.lastQueued += n; d.lastChange += n; d.changeTick += n; if (d.born != null) d.born += n; }
+  emit(S, { t: 'warpEnd' });
 }
 function spawnEnemy(S, type) {
   const P = S.player;
@@ -1234,7 +1448,7 @@ const Sound = {
   musicTick(S, t) {
     if (!this.on || !this.running) return;
     const P = S.player;
-    if (!P.od) { let err = mod1(-P.p * 4) - mod1(this.beat); if (err > .5) err -= 1; if (err < -.5) err += 1; this.beat += err * .08; }
+    if (!P.od && !S.warp) { let err = mod1(-P.p * 4) - mod1(this.beat); if (err > .5) err -= 1; if (err < -.5) err += 1; this.beat += err * .08; }
     this.beat += S.bpm / 60 * DT * S.ts;
     const step = Math.floor(this.beat * 4);
     let guard = 0;
@@ -1351,6 +1565,47 @@ const Sound = {
   levelUp(t) { if (!this.on) return; [0, 4, 7, 12].forEach((m, i) => this.osc('triangle', mtof(69 + m + (this.keyNow || 0)), t + i * .06, .14, this.sfx, .09)); },
   announce(t) { if (!this.on) return; this.osc('sine', 1320, t, .12, this.sfx, .07); this.osc('sine', 1760, t + .1, .16, this.sfx, .07); },
   clearChime(t) { if (!this.on) return; [7, 12, 19].forEach((m, i) => this.osc('triangle', mtof(81 + m + (this.keyNow || 0)), t + i * .045, .1, this.sfx, .06)); },
+  // ---- level-up warp
+  warpDuck(on) {                 // music drops under the warp and comes back for GO
+    if (!this.on) return;
+    const now = this.ctx.currentTime;
+    this.music.gain.setTargetAtTime(on ? .28 : 1, now, on ? .12 : .08);
+    this.tape.frequency.setTargetAtTime(on ? 900 : 18000, now, on ? .15 : .1);
+    if (on) for (const gr of this.growls.values()) gr.g.gain.setTargetAtTime(0, now, .05);
+  },
+  resync(S) { this.beat = Math.floor(this.beat) + mod1(-S.player.p * 4); this.lastStep = Math.floor(this.beat * 4); },
+  warpFanfare(t) {
+    if (!this.on) return;
+    const k = this.keyNow || 0;
+    [0, 4, 7, 12, 16, 19, 24].forEach((m, i) => this.osc('square', mtof(72 + m + k), t + i * .045, .1, this.sfx, .05));
+    this.osc('triangle', mtof(48 + k), t, .5, this.sfx, .14); this.osc('triangle', mtof(60 + k), t + .32, .35, this.sfx, .08);
+  },
+  tally(t, i) { if (this.on) this.osc('square', mtof(84 + (i % 12) + (this.keyNow || 0)), t, .035, this.sfx, .035); },
+  pipeUp(t) { if (!this.on) return; const o = this.osc('square', 220, t, .16, this.sfx, .05); o.frequency.exponentialRampToValueAtTime(660, t + .16); },
+  pipeDown(t) {                  // the dive: three falling steps, each with a quick drop
+    if (!this.on) return;
+    [[70, 0], [63, .11], [58, .22], [51, .33]].forEach(([m, d]) => { const o = this.osc('square', mtof(m), t + d, .09, this.sfx, .06); o.frequency.exponentialRampToValueAtTime(mtof(m - 5), t + d + .09); });
+  },
+  irisClose(t) { if (!this.on) return; const n = this.nz(t, .38, this.sfx, 'bandpass', 3000, 2, .3, .02); n.f.frequency.exponentialRampToValueAtTime(260, t + .38); const o = this.osc('sine', 300, t, .36, this.sfx, .1); o.frequency.exponentialRampToValueAtTime(70, t + .36); },
+  cardHit(t) {
+    if (!this.on) return;
+    const k = this.keyNow || 0;
+    [0, 7, 12, 16].forEach(m => this.osc('triangle', mtof(60 + m + k), t, .7, this.sfx, .06));
+    this.nz(t, .6, this.sfx, 'highpass', 6000, .7, .12, .05); this.osc('sine', 55, t, .5, this.sfx, .4, .004);
+  },
+  irisOpen(t) { if (!this.on) return; const n = this.nz(t, .34, this.sfx, 'bandpass', 300, 2, .28, .02); n.f.frequency.exponentialRampToValueAtTime(4200, t + .34); },
+  popOut(t) {                    // boing
+    if (!this.on) return;
+    const o = this.osc('sine', 180, t, .32, this.sfx, .22, .004); o.frequency.exponentialRampToValueAtTime(900, t + .12); o.frequency.exponentialRampToValueAtTime(520, t + .3);
+    this.osc('square', mtof(84 + (this.keyNow || 0)), t + .02, .08, this.sfx, .04);
+  },
+  thud(t) { if (!this.on) return; const o = this.osc('sine', 110, t, .22, this.sfx, .5, .002); o.frequency.exponentialRampToValueAtTime(38, t + .2); this.nz(t, .12, this.sfx, 'lowpass', 900, .7, .25, .002); },
+  goHit(t) {
+    if (!this.on) return;
+    const k = this.keyNow || 0;
+    [0, 4, 7, 12].forEach(m => this.osc('square', mtof(72 + m + k), t, .26, this.sfx, .045));
+    this.osc('triangle', mtof(96 + k), t + .05, .3, this.sfx, .05); this.kick(t);
+  },
   odSweep(t, on) {
     if (!this.on) return;
     const n = this.nz(t, .32, this.sfx, 'bandpass', on ? 500 : 4500, 4, .16, .02);
@@ -1359,26 +1614,33 @@ const Sound = {
 };
 
 /* ================================ RENDER ================================ */
-// "Neon Circuit" in 3D: a perspective camera looks down on the logical 1000×1000 board.
-// Walls, cars and markers get real height; the board is a slab. Logical geometry never
-// changes with screen size — only the camera fit does. DPR is capped at 2.
-const WALL_UP = 15, OUTER_UP = 22, SLAB = 30;
-const CAM = { a: 0, sa: 0, ca: 1, D: 2300, sc: 1, ox: 0, oy: 0 };
+// A perspective camera looks down on the logical board. Walls, cars and gems have real height;
+// the board is a thick floating slab. One key light (from the left) shades walls and cars by
+// facing, walls and cars cast soft shadows to the right, wall light strips reflect in the road,
+// and a cheap bloom pass (downscale, keep the brights, add back) makes lights glow. Logical
+// geometry never changes with screen size — only the camera fit does. DPR is capped at 2.
+const WALL_UP = 20, OUTER_UP = 28, SLAB = 44;
+const CAM = { a: 0, sa: 0, ca: 1, D: 2000, sc: 1, ox: 0, oy: 0 };
+const SHADOW = { x: .5, y: -.26 };                   // ground offset of a shadow per unit of height
+const LIT = (nx, ny) => Math.max(0, -.86 * nx + .51 * ny);   // how much a face with ground normal (nx, ny) faces the key light
 const _P = { x: 0, y: 0, k: 1 };
 const V = {
   dpr: 1, W: 0, H: 0, cssW: 0, cssH: 0, cv: null, g: null,
-  stat: null, statG: null, glow: null, glowG: null,
+  stat: null, statG: null, glow: null, glowG: null, bloomA: null, bloomB: null, bloomC: null, fxq: 1, ft: [],
   sp: {}, mpos: [], laneRib: [], trayPath: null, hue: HUE0,
   pulse: 0, punch: 0, sweep: -9, circ: -9, laneFx: [-9, -9, -9, -9], spring: { x: 0, v: 0 },
-  parts: [], pops: [], floaters: [], trails: new Map(), split: new Map(), tap: null,
-  p0: new Map(), rm: false, frame: 0, pp: {}, portrait: false,
+  parts: [], pops: [], floaters: [], puffs: [], trails: new Map(), split: new Map(), tap: null,
+  p0: new Map(), rm: false, frame: 0, pp: {}, portrait: false, wfx: null, shake: 0,
 };
 const easeOut = u => 1 - (1 - u) * (1 - u);
+const easeOutCubic = u => 1 - Math.pow(1 - u, 3);
+const easeInCubic = u => u * u * u;
 const hexA = (h, a) => `rgba(${parseInt(h.slice(1, 3), 16)},${parseInt(h.slice(3, 5), 16)},${parseInt(h.slice(5, 7), 16)},${a})`;
 const hexDark = h => `rgb(${Math.round(parseInt(h.slice(1, 3), 16) * .45)},${Math.round(parseInt(h.slice(3, 5), 16) * .45)},${Math.round(parseInt(h.slice(5, 7), 16) * .45)})`;
 const easeOutBack = u => { const v = u - 1; return 1 + 2.7 * v * v * v + 1.7 * v * v; };
 const easeInOut = u => u < .5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
 const mkCanvas = (w, h = w) => { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; };
+const neonOf = (hue, a) => Settings.hc ? `rgba(255,255,255,${a})` : `hsla(${hue},100%,72%,${a})`;
 
 function camSet(deg) { CAM.a = deg * Math.PI / 180; CAM.sa = Math.sin(CAM.a); CAM.ca = Math.cos(CAM.a); }
 function projU(x, y, h, o) {
@@ -1388,12 +1650,16 @@ function projU(x, y, h, o) {
 }
 // Board point (logical x, y) at height h → device pixels; o.k = pixels per logical unit there.
 function pj(x, y, h, o = _P) { projU(x, y, h, o); o.x = CAM.ox + o.x * CAM.sc; o.y = CAM.oy + o.y * CAM.sc; o.k *= CAM.sc; return o; }
-function camBounds() {
+// Camera fit uses a fixed reference outline (the boxiest board edge any map can have), so every
+// map is shown at the same scale and a new map never resizes the board.
+function camBounds(st = CFG.STRETCH) {
   let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
-  const o = {};
-  for (let i = 0; i < 96; i++) {
-    const q = rsPoint(476, rcFor(476), i / 96);
-    for (const h of [-SLAB, OUTER_UP + 8]) { projU(CX + q.x, CY + q.y, h, o); x0 = Math.min(x0, o.x); x1 = Math.max(x1, o.x); y0 = Math.min(y0, o.y); y1 = Math.max(y1, o.y); }
+  const o = {}, a = EDGE_H, r = 156, e = a - r;
+  for (const [cx, cy, a0] of [[e, -e - st, -Math.PI / 2], [e, e + st, 0], [-e, e + st, Math.PI / 2], [-e, -e - st, Math.PI]]) {
+    for (let i = 0; i <= 12; i++) {
+      const th = a0 + Math.PI / 2 * i / 12, x = cx + r * Math.cos(th), y = cy + r * Math.sin(th);
+      for (const h of [-SLAB - 20, OUTER_UP + 10]) { projU(CX + x, CY + y, h, o); x0 = Math.min(x0, o.x); x1 = Math.max(x1, o.x); y0 = Math.min(y0, o.y); y1 = Math.max(y1, o.y); }
+    }
   }
   return { x0, x1, y0, y1, aspect: (x1 - x0) / (y1 - y0) };
 }
@@ -1408,11 +1674,11 @@ function unproject(sx, sy) {
   const Z = uy * CAM.D / (CAM.D * CAM.ca + uy * CAM.sa), k = CAM.D / (CAM.D - Z * CAM.sa);
   return { x: ux / k, y: Z };
 }
-// Trace part of a rounded-square path (half-size h) projected at height hh.
-function pathRS(g, h, pa, pb, hh, move) {
-  const rc = rcFor(h), n = Math.max(2, Math.ceil(Math.abs(pb - pa) * perimOf(h) / 10));
+// Trace part of level h (progress pa → pb) projected at height hh, optionally shifted on the ground.
+function pathRS(g, h, pa, pb, hh, move, dx = 0, dy = 0) {
+  const c = curveOf(GEO, h), n = Math.max(2, Math.ceil(Math.abs(pb - pa) * c.len / 9));
   for (let i = 0; i <= n; i++) {
-    const q = rsPoint(h, rc, pa + (pb - pa) * i / n), o = pj(CX + q.x, CY + q.y, hh);
+    const q = trackPoint(h, pa + (pb - pa) * i / n), o = pj(CX + q.x + dx, CY + q.y + dy, hh);
     if (i === 0 && move) g.moveTo(o.x, o.y); else g.lineTo(o.x, o.y);
   }
 }
@@ -1438,12 +1704,24 @@ function mkSprites() {
   V.sp.glowC = radialSprite(128, [[0, 'rgba(61,232,255,.8)'], [.35, 'rgba(61,232,255,.25)'], [1, 'rgba(61,232,255,0)']]);
   V.sp.glowG = radialSprite(128, [[0, 'rgba(255,194,71,.9)'], [.4, 'rgba(255,194,71,.25)'], [1, 'rgba(255,194,71,0)']]);
   V.sp.glowW = radialSprite(128, [[0, 'rgba(255,243,230,.9)'], [.4, 'rgba(255,243,230,.2)'], [1, 'rgba(255,243,230,0)']]);
-  V.sp.shadow = radialSprite(64, [[0, 'rgba(0,0,0,.55)'], [.6, 'rgba(0,0,0,.25)'], [1, 'rgba(0,0,0,0)']]);
+  V.sp.glowB = radialSprite(64, [[0, 'rgba(80,120,255,.95)'], [.4, 'rgba(80,120,255,.3)'], [1, 'rgba(80,120,255,0)']]);
+  V.sp.head = radialSprite(64, [[0, 'rgba(255,250,235,1)'], [.3, 'rgba(255,240,200,.45)'], [1, 'rgba(255,240,200,0)']]);
+  V.sp.tail = radialSprite(64, [[0, 'rgba(255,60,70,1)'], [.35, 'rgba(255,40,60,.4)'], [1, 'rgba(255,40,60,0)']]);
+  V.sp.shadow = radialSprite(64, [[0, 'rgba(0,0,0,.6)'], [.6, 'rgba(0,0,0,.28)'], [1, 'rgba(0,0,0,0)']]);
   V.sp.fire = radialSprite(128, [[0, 'rgba(255,252,230,1)'], [.22, 'rgba(255,214,110,.95)'], [.5, 'rgba(255,110,40,.7)'], [.78, 'rgba(200,40,20,.3)'], [1, 'rgba(120,20,10,0)']]);
   V.sp.smoke = radialSprite(96, [[0, 'rgba(70,70,82,.75)'], [.55, 'rgba(45,45,55,.4)'], [1, 'rgba(30,30,40,0)']]);
+  V.sp.dust = radialSprite(64, [[0, 'rgba(200,196,220,.5)'], [.6, 'rgba(150,146,170,.18)'], [1, 'rgba(120,120,140,0)']]);
   V.sp.puGlow = {};
   for (const k of PU_KINDS) { const c = POWERUPS[k].color; V.sp.puGlow[k] = radialSprite(128, [[0, hexA(c, .85)], [.4, hexA(c, .28)], [1, hexA(c, 0)]]); }
   V.sp.scorch = radialSprite(128, [[0, 'rgba(0,0,0,.85)'], [.45, 'rgba(20,10,8,.6)'], [.75, 'rgba(60,20,10,.25)'], [1, 'rgba(0,0,0,0)']]);
+  { const c = mkCanvas(64), g = c.getContext('2d');         // four-point sparkle
+    g.translate(32, 32); g.fillStyle = 'rgba(255,255,255,.95)';
+    for (let i = 0; i < 4; i++) { g.rotate(Math.PI / 2); g.beginPath(); g.moveTo(0, -30); g.quadraticCurveTo(2, -2, 30, 0); g.quadraticCurveTo(2, 2, 0, 30); g.closePath(); g.globalAlpha = .5; g.fill(); }
+    g.globalAlpha = 1; g.drawImage(radialSprite(24, [[0, '#fff'], [1, 'rgba(255,255,255,0)']]), -12, -12);
+    V.sp.star = c; }
+  { const c = mkCanvas(64), g = c.getContext('2d'), id = g.createImageData(64, 64);   // asphalt grain
+    for (let i = 0; i < id.data.length; i += 4) { const v = 128 + (Math.random() - .5) * 255 | 0; id.data[i] = id.data[i + 1] = id.data[i + 2] = v; id.data[i + 3] = 255; }
+    g.putImageData(id, 0, 0); V.sp.grain = c; }
   const m = mkCanvas(64), g = m.getContext('2d');
   g.drawImage(V.sp.glowG, 0, 0, 64, 64);
   g.beginPath(); g.moveTo(32, 14); g.lineTo(44, 32); g.lineTo(32, 50); g.lineTo(20, 32); g.closePath(); g.fillStyle = '#E8A93A'; g.fill();
@@ -1484,11 +1762,11 @@ function mkSprites() {
 }
 const gapOpenAt = (d, q) => !App.S || !App.S.gapOpen || App.S.gapOpen[d][q];
 
-// Space the board may use (CSS px) and the camera tilt for this orientation.
+// Space the board may use (CSS px) and the camera for this orientation.
 function availSize() {
   const E = UI.el;
   V.portrait = window.innerHeight > window.innerWidth * 1.05;
-  camSet(V.portrait ? 22 : 44);
+  camSet(V.portrait ? 30 : 50); CAM.D = V.portrait ? 2300 : 2000;
   return { w: Math.max(200, window.innerWidth - 24), h: Math.max(160, window.innerHeight - E.top.offsetHeight - E.bottom.offsetHeight - (V.portrait ? 68 : 32)) };
 }
 // Portrait phones: stretch the track into the tallest rectangle that still fits the width,
@@ -1496,243 +1774,331 @@ function availSize() {
 function fitStretch() {
   const av = availSize();
   if (!V.portrait) return 0;
-  const rc0 = CFG.LANE_RC0, st0 = CFG.STRETCH;
   let best = 0;
-  for (let st = 0; st <= 520; st += 20) {
-    setGeometry(rc0, st);
-    if (camBounds().aspect >= av.w / av.h) best = st; else break;
-  }
-  setGeometry(rc0, st0);
+  for (let st = 0; st <= 1000; st += 20) { if (camBounds(st).aspect >= av.w / av.h) best = st; else break; }
   return best;
 }
 function layout(force) {
   const E = UI.el, av = availSize(), b = camBounds();
   const w = Math.floor(Math.min(av.w, av.h * b.aspect, 1500)), h = Math.floor(w / b.aspect);
   E.wrap.style.width = w + 'px'; E.wrap.style.height = h + 'px';
-  const dpr = Math.min(2, window.devicePixelRatio || 1), W = Math.round(w * dpr), Hd = Math.round(h * dpr);
+  const dpr = Math.min(V.dprCap || 2, window.devicePixelRatio || 1), W = Math.round(w * dpr), Hd = Math.round(h * dpr);
   if (force || W !== V.W || Hd !== V.H || V.camA !== CAM.a) {
     V.W = W; V.H = Hd; V.cssW = w; V.cssH = h; V.dpr = dpr; V.camA = CAM.a;
-    V.os = w < 560 ? 1.4 : w < 900 ? 1.22 : 1.06;          // bigger cars and markers on small screens
+    V.os = w < 560 ? 1.4 : w < 900 ? 1.28 : 1.2;           // bigger cars and markers on small screens
     for (const c of [V.cv, V.stat, V.glow]) { c.width = W; c.height = Hd; }
+    if (!V.bloomA) { V.bloomA = mkCanvas(1); V.bloomB = mkCanvas(1); V.bloomC = mkCanvas(1); }
+    V.bloomA.width = V.bloomB.width = Math.max(2, Math.round(W / 9)); V.bloomA.height = V.bloomB.height = Math.max(2, Math.round(Hd / 9));
     camFit(W, Hd);
     buildStatic();
   }
   UI.syncChips();
 }
 
-// Static layer: slab, floor, grooves, raised walls (depth-sorted), centre pad, scars.
+// Static layer (rebuilt only when the map or the screen changes): floating slab, floor, asphalt
+// lanes, doors, wall reflections and shadows, depth-sorted 3D walls with light strips, door
+// posts, the centre pad, crash scars, then a key-light sheen and a little distance haze.
 function buildStatic() {
   if (!V.W) return;
-  const g = V.statG, hc = Settings.hc, hue = V.hue;
+  const g = V.statG, hc = Settings.hc, hue = V.hue, s = CAM.sc, dpr = V.dpr, st = CFG.STRETCH, neon = a => neonOf(hue, a);
   g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, V.W, V.H);
-  // slab edge (the board's thickness, visible on the near side)
-  const slab = new Path2D(); pathRS(slab, 476, 0, 1, -SLAB, true); slab.closePath();
-  g.fillStyle = hc ? '#111' : '#07070B'; g.fill(slab);
-  const edge = new Path2D(); pathRS(edge, 476, 0, 1, 0, true); pathRS(edge, 476, 1, 0, -SLAB, false); edge.closePath();
-  const eg = g.createLinearGradient(0, pj(CX, CY - 476, 0).y, 0, pj(CX, CY + 476, -SLAB).y);
-  eg.addColorStop(0, '#1a1a24'); eg.addColorStop(1, hc ? '#333' : '#23232f');
+  g.lineJoin = 'round';
+  // slab: a soft shadow under the floating board, a side band, a bright lip and a neon underglow
+  const bot = new Path2D(); loopPath(bot, EDGE_H, -SLAB);
+  g.save(); g.shadowColor = 'rgba(0,0,0,.9)'; g.shadowBlur = 40 * dpr; g.shadowOffsetY = 18 * dpr; g.fillStyle = '#050508'; g.fill(bot); g.restore();
+  const edge = new Path2D(); pathRS(edge, EDGE_H, 0, 1, 0, true); pathRS(edge, EDGE_H, 1, 0, -SLAB, false); edge.closePath();
+  const yN = pj(CX, CY + EDGE_H + st, 0, {}).y, yB = pj(CX, CY + EDGE_H + st, -SLAB, {}).y;
+  const eg = g.createLinearGradient(0, yN, 0, yB);
+  eg.addColorStop(0, hc ? '#444' : '#2A2A3A'); eg.addColorStop(.18, hc ? '#333' : '#1C1C29'); eg.addColorStop(1, hc ? '#222' : '#0C0C13');
   g.fillStyle = eg; g.fill(edge, 'nonzero');
+  g.globalCompositeOperation = 'lighter';
+  g.strokeStyle = neon(.35); g.lineWidth = 5 * dpr; g.stroke(bot);
+  g.strokeStyle = neon(.8); g.lineWidth = 1.6 * dpr; g.stroke(bot);
+  g.globalCompositeOperation = 'source-over';
   // floor
-  V.trayPath = new Path2D(); loopPath(V.trayPath, 476, 0);
-  const c0 = pj(CX, CY, 0, {}), c1 = pj(CX, CY + 480, 0, {});
-  const tray = g.createRadialGradient(c0.x, c0.y, 30, c0.x, c0.y, Math.abs(c1.y - c0.y) * 1.6);
-  tray.addColorStop(0, hc ? '#000' : '#191922'); tray.addColorStop(1, hc ? '#000' : '#0D0D13');
+  V.trayPath = new Path2D(); loopPath(V.trayPath, EDGE_H, 0);
+  const c0 = pj(CX, CY, 0, {}), c1 = pj(CX, CY + 480 + st, 0, {});
+  const tray = g.createRadialGradient(c0.x, c0.y, 30, c0.x, c0.y, Math.abs(c1.y - c0.y) * 1.5);
+  tray.addColorStop(0, hc ? '#000' : '#1A1A24'); tray.addColorStop(1, hc ? '#000' : '#0C0C12');
   g.fillStyle = tray; g.fill(V.trayPath);
-  g.strokeStyle = hc ? 'rgba(255,255,255,.5)' : 'rgba(255,255,255,.09)'; g.lineWidth = 1.5 * V.dpr; g.stroke(V.trayPath);
-  // Doors: every open gap gets a floor patch with in/out arrows (and glowing posts, below).
-  const gw = CFG.GAP_W / 2, dirs = [[0, -1], [1, 0], [0, 1], [-1, 0]];       // outward axis per gap N E S W
+  g.strokeStyle = hc ? 'rgba(255,255,255,.6)' : 'rgba(255,255,255,.2)'; g.lineWidth = 1.5 * dpr; g.stroke(V.trayPath);
+  // lanes: asphalt with a faint grain, crisp edge lines and a neutral centre dash
+  let grain = null; try { grain = g.createPattern(V.sp.grain, 'repeat'); } catch (e) {}
+  for (let i = 0; i < 4; i++) {
+    V.laneRib[i] = ribbon(H[i] - 31, H[i] + 31, .4);
+    g.fillStyle = hc ? '#34343F' : '#23232D'; g.fill(V.laneRib[i], 'evenodd');
+    if (grain && !hc) { g.globalAlpha = .05; g.fillStyle = grain; g.fill(V.laneRib[i], 'evenodd'); g.globalAlpha = 1; }
+    g.strokeStyle = hc ? 'rgba(255,255,255,.4)' : 'rgba(255,255,255,.1)'; g.lineWidth = 1.3 * dpr; g.stroke(V.laneRib[i]);
+    g.beginPath(); pathRS(g, H[i], 0, 1, .6, true); g.closePath();
+    g.setLineDash([12 * s, 14 * s]);
+    g.strokeStyle = hc ? 'rgba(255,255,255,.55)' : 'rgba(255,255,255,.13)'; g.lineWidth = 2 * s; g.stroke();
+    g.setLineDash([]);
+  }
+  // Doors: every open gap gets a floor patch with in/out chevrons along its spoke.
+  const gw = CFG.GAP_W / 2;
   V.door = [[], [], []];
   for (let d = 0; d < 3; d++) for (let q = 0; q < 4; q++) {
     if (!gapOpenAt(d, q)) { V.door[d][q] = null; continue; }
-    const [ax, ay] = dirs[q], tx = -ay, ty = ax, ex = ay ? CFG.STRETCH : 0, r0 = H[d] + 6 + ex, r1 = H[d + 1] - 6 + ex, P2 = new Path2D();
-    for (const [r, w] of [[r0, -gw], [r0, gw], [r1, gw], [r1, -gw]]) { const o = pj(CX + ax * r + tx * w, CY + ay * r + ty * w, .2); P2.lineTo(o.x, o.y); }
+    const pd = q / 4, A0 = trackPoint(H[d] + 6, pd, {}), A1 = trackPoint(H[d + 1] - 6, pd, {}), P2 = new Path2D();
+    for (const [Q, w] of [[A0, -gw], [A0, gw], [A1, gw], [A1, -gw]]) { const o = pj(CX + Q.x + Q.tx * w, CY + Q.y + Q.ty * w, .2); P2.lineTo(o.x, o.y); }
     P2.closePath(); V.door[d][q] = P2;
-    g.fillStyle = hc ? 'rgba(255,255,255,.1)' : 'rgba(255,255,255,.035)'; g.fill(P2);
-    // double chevron pointing across the divider: in and out
-    const rm = (r0 + r1) / 2;
-    g.strokeStyle = hc ? 'rgba(255,255,255,.7)' : 'rgba(255,243,230,.28)'; g.lineWidth = 2.2 * CAM.sc; g.lineCap = 'round'; g.lineJoin = 'round';
+    g.fillStyle = hc ? 'rgba(255,255,255,.1)' : 'rgba(255,255,255,.04)'; g.fill(P2);
+    const L = Math.hypot(A1.x - A0.x, A1.y - A0.y) || 1, ux = (A1.x - A0.x) / L, uy = (A1.y - A0.y) / L, mx = (A0.x + A1.x) / 2, my = (A0.y + A1.y) / 2, lx = -uy, ly = ux;
+    g.strokeStyle = hc ? 'rgba(255,255,255,.7)' : 'rgba(255,243,230,.3)'; g.lineWidth = 2.2 * s; g.lineCap = 'round';
     for (const sg of [-1, 1]) {
       g.beginPath();
-      for (const [dr, dw] of [[sg * 3, -9], [sg * 15, 0], [sg * 3, 9]]) { const o = pj(CX + ax * (rm + dr) + tx * dw, CY + ay * (rm + dr) + ty * dw, .3); g.lineTo(o.x, o.y); }
+      for (const [dr, dw] of [[sg * 3, -9], [sg * 15, 0], [sg * 3, 9]]) { const o = pj(CX + mx + ux * dr + lx * dw, CY + my + uy * dr + ly * dw, .3); g.lineTo(o.x, o.y); }
       g.stroke();
     }
   }
   g.lineCap = 'butt';
-  // grooves: dark bed, blurred low-alpha glow, crisp line
-  // lanes: clean road surfaces, lighter than the floor, with a faint neutral centre dash
-  for (let i = 0; i < 4; i++) {
-    V.laneRib[i] = ribbon(H[i] - 31, H[i] + 31, .4);
-    g.fillStyle = hc ? '#34343F' : '#23232F'; g.fill(V.laneRib[i], 'evenodd');
-    g.strokeStyle = hc ? 'rgba(255,255,255,.35)' : 'rgba(255,255,255,.07)'; g.lineWidth = 1.2 * V.dpr; g.stroke(V.laneRib[i]);
-    g.beginPath(); pathRS(g, H[i], 0, 1, .6, true); g.closePath();
-    g.setLineDash([12 * CAM.sc, 14 * CAM.sc]);
-    g.strokeStyle = hc ? 'rgba(255,255,255,.55)' : 'rgba(255,255,255,.13)'; g.lineWidth = 2 * CAM.sc; g.stroke();
-    g.setLineDash([]);
-  }
-  // centre pad
-  g.beginPath(); groundCircle(g, CX, CY, 100, 0, Math.PI * 2, 0); g.closePath();
-  g.fillStyle = hc ? '#000' : 'rgba(255,255,255,.025)'; g.fill();
-  // scars (last 20 crash points for this difficulty)
-  const scars = (Store.get('scars', {}) || {})[scarKey()] || [];
-  for (const s of scars) {
-    const ca = Math.cos(s.a), sn = Math.sin(s.a);
-    for (const [off, len, al] of [[-8, 26, .5], [6, 22, .5], [0, 34, .12]]) {
-      g.beginPath();
-      for (const [u, v] of [[-len, off - 2], [len, off - 2], [len, off + 2], [-len, off + 2]]) { const o = pj(s.x + u * ca - v * sn, s.y + u * sn + v * ca, .2); g.lineTo(o.x, o.y); }
-      g.closePath(); g.fillStyle = al > .3 ? 'rgba(0,0,0,.5)' : 'rgba(0,0,0,.22)'; g.fill();
-    }
-  }
-  // Walls: 3D barrier blocks — light slate tops with lit edges, shaded sides, a soft contact
-  // shadow on the floor, and cool-white posts at every open door. Depth-sorted far → near.
-  const segs = [], pieces = [];
+  // wall pieces between open doors
+  const pieces = [];
   for (let w = 0; w < 5; w++) {
-    const hw = WALL_H[w], rw = rcFor(hw), edgeW = w === 0 || w === 4, gh = edgeW ? 0 : CFG.GAP_W / 2 / perimOf(hw);
-    const up = w === 4 ? OUTER_UP : WALL_UP, tw = edgeW ? 12 : 9;
+    const hw = WALL_H[w], c = curveOf(GEO, hw), edgeW = w === 0 || w === 4, up = w === 4 ? OUTER_UP : WALL_UP, tw = edgeW ? 12 : 9;
     for (let q = 0; q < 4; q++) {
-      const openA = !edgeW && gapOpenAt(w - 1, q), openB = !edgeW && gapOpenAt(w - 1, (q + 1) % 4);   // walled gaps stay solid
-      const pa = q / 4 + (openA ? gh : 0), pb = (q + 1) / 4 - (openB ? gh : 0), n = Math.ceil((pb - pa) * perimOf(hw) / 14);
-      pieces.push({ hw, pa, pb, tw });
-      for (let i = 0; i < n; i++) {
-        const a = rsPoint(hw, rw, pa + (pb - pa) * i / n), ax = CX + a.x, ay = CY + a.y, anx = a.nx, any = a.ny;
-        const b = rsPoint(hw, rw, pa + (pb - pa) * (i + 1) / n), bx = CX + b.x, by = CY + b.y;
-        segs.push({ ax, ay, bx, by, anx, any, bnx: b.nx, bny: b.ny, up, tw, capA: openA && i === 0, capB: openB && i === n - 1, z: (ay + by) / 2 });
-      }
-      if (openB) for (const pp2 of [pb, (q + 1) / 4 + gh]) { const e = rsPoint(hw, rw, pp2); segs.push({ post: true, x: CX + e.x, y: CY + e.y, up: up + 7, z: CY + e.y }); }
+      const openA = !edgeW && gapOpenAt(w - 1, q), openB = !edgeW && gapOpenAt(w - 1, (q + 1) % 4), gh = gw / (4 * c.ql[q]);
+      pieces.push({ w, hw, q, up, tw, openA, openB, pa: q / 4 + (openA ? gh : 0), pb: (q + 1) / 4 - (openB ? gh : 0), len: c.ql[q] });
     }
   }
-  // contact shadow where the walls meet the floor
-  g.lineCap = 'round'; g.strokeStyle = 'rgba(0,0,0,.38)';
-  for (const pc of pieces) { g.beginPath(); pathRS(g, pc.hw, pc.pa, pc.pb, .1, true); g.lineWidth = (pc.tw + 12) * CAM.sc; g.stroke(); }
-  segs.sort((s, t) => s.z - t.z);
-  const camY = CY + CAM.D * CAM.sa, P0 = {}, quad = (p) => { g.beginPath(); g.moveTo(p[0], p[1]); g.lineTo(p[2], p[3]); g.lineTo(p[4], p[5]); g.lineTo(p[6], p[7]); g.closePath(); };
-  const TOP = hc ? '#E4E7F2' : '#A3A9C0', SIDE = hc ? [150, 154, 172] : [54, 58, 78];
-  const sideCol = (nx, ny) => { const sh = .7 + .5 * Math.max(0, -.45 * nx + .89 * ny); return 'rgb(' + SIDE.map(v => Math.min(255, Math.round(v * sh))).join(',') + ')'; };
-  for (const s of segs) {
-    if (s.post) {           // door post: a slightly taller pillar with a cool-white light
-      const b0 = pj(s.x, s.y, 0, P0), bx = b0.x, by = b0.y, t = pj(s.x, s.y, s.up), tk = t.k, tx = t.x, ty = t.y;
-      g.strokeStyle = hc ? '#fff' : '#5B6180'; g.lineWidth = 12 * tk; g.lineCap = 'round';
-      g.beginPath(); g.moveTo(bx, by); g.lineTo(tx, ty); g.stroke();
-      g.save(); g.shadowColor = 'rgba(190,228,255,.95)'; g.shadowBlur = 14 * V.dpr;
-      g.fillStyle = '#EAF6FF'; g.beginPath(); g.ellipse(tx, ty, 6 * tk, 6 * tk * CAM.ca, 0, 0, Math.PI * 2); g.fill();
+  // reflections of the wall light strips in the road, then soft shadows (contact + cast)
+  g.lineCap = 'round';
+  if (!hc) {
+    g.globalCompositeOperation = 'lighter';
+    for (const pc of pieces) {
+      g.beginPath(); pathRS(g, pc.hw, pc.pa, pc.pb, -pc.up * .9, true);
+      g.strokeStyle = neon(.05); g.lineWidth = 14 * s; g.stroke();
+      g.strokeStyle = neon(.1); g.lineWidth = 4 * s; g.stroke();
+    }
+    g.globalCompositeOperation = 'source-over';
+  }
+  for (const pc of pieces) {
+    g.beginPath(); pathRS(g, pc.hw, pc.pa, pc.pb, .1, true, SHADOW.x * pc.up, SHADOW.y * pc.up);
+    g.strokeStyle = 'rgba(0,0,0,.3)'; g.lineWidth = (pc.tw + 8) * s; g.stroke();
+    g.beginPath(); pathRS(g, pc.hw, pc.pa, pc.pb, .1, true);
+    g.strokeStyle = 'rgba(0,0,0,.42)'; g.lineWidth = (pc.tw + 10) * s; g.stroke();
+  }
+  // Walls: 3D barrier blocks, depth-sorted far → near. Sides are shaded by facing with an
+  // ambient-occlusion band at the foot; tops carry a neon light strip; open doors get posts.
+  const segs = [], A = {}, B = {}, E2 = {};
+  for (const pc of pieces) {
+    const n = Math.max(1, Math.ceil((pc.pb - pc.pa) * 4 * pc.len / 14));
+    for (let i = 0; i < n; i++) {
+      trackPoint(pc.hw, pc.pa + (pc.pb - pc.pa) * i / n, A); trackPoint(pc.hw, pc.pa + (pc.pb - pc.pa) * (i + 1) / n, B);
+      segs.push({ ax: CX + A.x, ay: CY + A.y, bx: CX + B.x, by: CY + B.y, anx: A.nx, any: A.ny, bnx: B.nx, bny: B.ny, up: pc.up, tw: pc.tw, capA: pc.openA && i === 0, capB: pc.openB && i === n - 1, z: (A.y + B.y) / 2 + CY });
+    }
+    if (pc.openB) for (const pp2 of [pc.pb, (pc.q + 1) / 4 + (CFG.GAP_W / 2) / (4 * curveOf(GEO, pc.hw).ql[(pc.q + 1) % 4])]) { trackPoint(pc.hw, pp2, E2); segs.push({ post: true, x: CX + E2.x, y: CY + E2.y, up: pc.up + 8, z: CY + E2.y }); }
+  }
+  segs.sort((p, q) => p.z - q.z);
+  const camY = CY + CAM.D * CAM.sa, quad = (p) => { g.beginPath(); g.moveTo(p[0], p[1]); g.lineTo(p[2], p[3]); g.lineTo(p[4], p[5]); g.lineTo(p[6], p[7]); g.closePath(); };
+  const TOP = hc ? '#E4E7F2' : '#9298B3', SIDE = hc ? [150, 154, 172] : [56, 60, 82];
+  const sideCol = (nx, ny) => { const L = Math.hypot(nx, ny) || 1, sh = .62 + .62 * LIT(nx / L, ny / L); return 'rgb(' + SIDE.map(v => Math.min(255, Math.round(v * sh))).join(',') + ')'; };
+  const P = (x, y, h) => { const o = pj(x, y, h); return [o.x, o.y]; };
+  for (const sg of segs) {
+    if (sg.post) {           // door post: a taller pillar with a light on top
+      const b0 = pj(sg.x, sg.y, 0, {}), t = pj(sg.x, sg.y, sg.up, {});
+      g.strokeStyle = hc ? '#fff' : '#5E6485'; g.lineWidth = 12 * t.k; g.lineCap = 'round';
+      g.beginPath(); g.moveTo(b0.x, b0.y); g.lineTo(t.x, t.y); g.stroke();
+      g.save(); g.shadowColor = neon(.95); g.shadowBlur = 16 * dpr;
+      g.fillStyle = hc ? '#fff' : `hsl(${hue},100%,88%)`; g.beginPath(); g.ellipse(t.x, t.y, 6 * t.k, 6 * t.k * CAM.ca, 0, 0, Math.PI * 2); g.fill();
       g.restore();
       continue;
     }
-    const hA = s.tw / 2, hB = s.tw / 2;
-    const P = (x, y, h) => { const o = pj(x, y, h); return [o.x, o.y, o.k]; };
-    const aI0 = P(s.ax - s.anx * hA, s.ay - s.any * hA, 0), aO0 = P(s.ax + s.anx * hA, s.ay + s.any * hA, 0);
-    const bI0 = P(s.bx - s.bnx * hB, s.by - s.bny * hB, 0), bO0 = P(s.bx + s.bnx * hB, s.by + s.bny * hB, 0);
-    const aI1 = P(s.ax - s.anx * hA, s.ay - s.any * hA, s.up), aO1 = P(s.ax + s.anx * hA, s.ay + s.any * hA, s.up);
-    const bI1 = P(s.bx - s.bnx * hB, s.by - s.bny * hB, s.up), bO1 = P(s.bx + s.bnx * hB, s.by + s.bny * hB, s.up);
-    const mnx = (s.anx + s.bnx) / 2, mny = (s.any + s.bny) / 2, mx = (s.ax + s.bx) / 2, my = (s.ay + s.by) / 2;
+    const h2 = sg.tw / 2;
+    const aI0 = P(sg.ax - sg.anx * h2, sg.ay - sg.any * h2, 0), aO0 = P(sg.ax + sg.anx * h2, sg.ay + sg.any * h2, 0);
+    const bI0 = P(sg.bx - sg.bnx * h2, sg.by - sg.bny * h2, 0), bO0 = P(sg.bx + sg.bnx * h2, sg.by + sg.bny * h2, 0);
+    const aI1 = P(sg.ax - sg.anx * h2, sg.ay - sg.any * h2, sg.up), aO1 = P(sg.ax + sg.anx * h2, sg.ay + sg.any * h2, sg.up);
+    const bI1 = P(sg.bx - sg.bnx * h2, sg.by - sg.bny * h2, sg.up), bO1 = P(sg.bx + sg.bnx * h2, sg.by + sg.bny * h2, sg.up);
+    const mnx = (sg.anx + sg.bnx) / 2, mny = (sg.any + sg.bny) / 2, mx = (sg.ax + sg.bx) / 2, my = (sg.ay + sg.by) / 2;
     const outer = mnx * (CX - mx) + mny * (camY - my) > 0;          // which long side faces the camera
-    const sf = outer ? [aO0, bO0, bO1, aO1] : [aI0, bI0, bI1, aI1];
+    const f0 = outer ? aO0 : aI0, f1 = outer ? bO0 : bI0, f2 = outer ? bO1 : bI1, f3 = outer ? aO1 : aI1;
     g.fillStyle = sideCol(outer ? mnx : -mnx, outer ? mny : -mny);
-    quad([sf[0][0], sf[0][1], sf[1][0], sf[1][1], sf[2][0], sf[2][1], sf[3][0], sf[3][1]]); g.fill();
+    quad([f0[0], f0[1], f1[0], f1[1], f2[0], f2[1], f3[0], f3[1]]); g.fill();
+    // ambient occlusion band at the foot of the side
+    const k = .42, m1 = [f1[0] + (f2[0] - f1[0]) * k, f1[1] + (f2[1] - f1[1]) * k], m0 = [f0[0] + (f3[0] - f0[0]) * k, f0[1] + (f3[1] - f0[1]) * k];
+    g.fillStyle = 'rgba(0,0,0,.26)'; quad([f0[0], f0[1], f1[0], f1[1], m1[0], m1[1], m0[0], m0[1]]); g.fill();
     // end caps at door openings
-    const tx = s.bx - s.ax, ty = s.by - s.ay;
-    if (s.capA && (-tx * (CX - s.ax) - ty * (camY - s.ay)) > 0) { g.fillStyle = sideCol(-tx / 14, -ty / 14); quad([aI0[0], aI0[1], aO0[0], aO0[1], aO1[0], aO1[1], aI1[0], aI1[1]]); g.fill(); }
-    if (s.capB && (tx * (CX - s.bx) + ty * (camY - s.by)) > 0) { g.fillStyle = sideCol(tx / 14, ty / 14); quad([bI0[0], bI0[1], bO0[0], bO0[1], bO1[0], bO1[1], bI1[0], bI1[1]]); g.fill(); }
-    // top face (stroked in its own colour to hide seams between segments)
-    g.fillStyle = TOP; g.strokeStyle = TOP; g.lineWidth = 1 * V.dpr;
+    const tx = sg.bx - sg.ax, ty = sg.by - sg.ay;
+    if (sg.capA && (-tx * (CX - sg.ax) - ty * (camY - sg.ay)) > 0) { g.fillStyle = sideCol(-tx, -ty); quad([aI0[0], aI0[1], aO0[0], aO0[1], aO1[0], aO1[1], aI1[0], aI1[1]]); g.fill(); }
+    if (sg.capB && (tx * (CX - sg.bx) + ty * (camY - sg.by)) > 0) { g.fillStyle = sideCol(tx, ty); quad([bI0[0], bI0[1], bO0[0], bO0[1], bO1[0], bO1[1], bI1[0], bI1[1]]); g.fill(); }
+    // top face (stroked in its own colour to hide seams), lit edges, neon light strip
+    g.fillStyle = TOP; g.strokeStyle = TOP; g.lineWidth = 1 * dpr;
     quad([aI1[0], aI1[1], bI1[0], bI1[1], bO1[0], bO1[1], aO1[0], aO1[1]]); g.fill(); g.stroke();
     g.lineCap = 'round';
-    g.strokeStyle = hc ? '#fff' : 'rgba(255,255,255,.62)'; g.lineWidth = 1.4 * V.dpr;
+    g.strokeStyle = hc ? '#fff' : 'rgba(255,255,255,.7)'; g.lineWidth = 1.4 * dpr;
     g.beginPath(); g.moveTo(aO1[0], aO1[1]); g.lineTo(bO1[0], bO1[1]); g.stroke();
-    g.strokeStyle = hc ? '#fff' : 'rgba(255,255,255,.28)'; g.lineWidth = 1 * V.dpr;
+    g.strokeStyle = hc ? '#fff' : 'rgba(255,255,255,.3)'; g.lineWidth = 1 * dpr;
     g.beginPath(); g.moveTo(aI1[0], aI1[1]); g.lineTo(bI1[0], bI1[1]); g.stroke();
+    g.strokeStyle = neon(.9); g.lineWidth = 2 * dpr;
+    g.beginPath(); g.moveTo((aI1[0] + aO1[0]) / 2, (aI1[1] + aO1[1]) / 2); g.lineTo((bI1[0] + bO1[0]) / 2, (bI1[1] + bO1[1]) / 2); g.stroke();
   }
   g.lineCap = 'butt';
+  // centre pad
+  g.beginPath(); groundCircle(g, CX, CY, 100, 0, Math.PI * 2, 0); g.closePath();
+  g.fillStyle = hc ? '#000' : 'rgba(255,255,255,.025)'; g.fill();
+  g.strokeStyle = neon(.18); g.lineWidth = 1.5 * dpr; g.stroke();
+  // scars (last 20 crash points for this mode)
+  const scars = (Store.get('scars', {}) || {})[scarKey()] || [];
+  for (const sc of scars) {
+    const ca = Math.cos(sc.a), sn = Math.sin(sc.a);
+    for (const [off, len, al] of [[-8, 26, .5], [6, 22, .5], [0, 34, .12]]) {
+      g.beginPath();
+      for (const [u, v] of [[-len, off - 2], [len, off - 2], [len, off + 2], [-len, off + 2]]) { const o = pj(sc.x + u * ca - v * sn, sc.y + u * sn + v * ca, .2); g.lineTo(o.x, o.y); }
+      g.closePath(); g.fillStyle = al > .3 ? 'rgba(0,0,0,.5)' : 'rgba(0,0,0,.22)'; g.fill();
+    }
+  }
+  // key-light sheen on the left and a little haze toward the far edge
+  if (!hc) {
+    g.globalCompositeOperation = 'source-atop';
+    const L0 = pj(CX - 330, CY - 120, 0, {}), sh = g.createRadialGradient(L0.x, L0.y, 0, L0.x, L0.y, 760 * s);
+    sh.addColorStop(0, 'rgba(190,200,255,.075)'); sh.addColorStop(1, 'rgba(190,200,255,0)');
+    g.fillStyle = sh; g.fillRect(0, 0, V.W, V.H);
+    const yT = pj(CX, CY - EDGE_H - st, 0, {}).y, fz = g.createLinearGradient(0, yT, 0, c0.y);
+    fz.addColorStop(0, 'rgba(12,10,26,.42)'); fz.addColorStop(1, 'rgba(12,10,26,0)');
+    g.fillStyle = fz; g.fillRect(0, 0, V.W, V.H);
+    g.globalCompositeOperation = 'source-over';
+  }
   const G = V.glowG;
   G.setTransform(1, 0, 0, 1, 0, 0); G.clearRect(0, 0, V.W, V.H);
   for (let i = 0; i < 4; i++) { G.fillStyle = 'rgba(255,255,255,.55)'; G.fill(V.laneRib[i], 'evenodd'); }   // neutral downbeat pulse
 }
 
-// Car position on the board at fractional tick tf (lane changes animate over LANE_ANIM_TICKS).
+// Car position on the board at fractional tick tf (lane changes animate over LANE_ANIM_TICKS
+// with a little hop). o: x, y, outward normal, heading a, hop 0–1.
+const _cq = {}, _cq0 = {};
 function carPos(c, p, tf, o) {
-  let h = H[c.lane], lat = 0;
-  const u = (tf - c.changeTick) / CFG.LANE_ANIM_TICKS;
+  const q = trackPoint(H[c.lane], p, _cq), u = (tf - c.changeTick) / CFG.LANE_ANIM_TICKS;
+  let x = q.x, y = q.y, nx = q.nx, ny = q.ny, tx = q.tx, ty = q.ty, lat = 0, hop = 0;
   if (u >= 0 && u < 1 && c.changeFrom !== c.lane) {
-    const e = easeInOut(u); h = H[c.changeFrom] + (H[c.lane] - H[c.changeFrom]) * e;
-    lat = Math.sign(c.lane - c.changeFrom) * Math.sin(Math.PI * u) * .55;
+    const r = trackPoint(H[c.changeFrom], p, _cq0), e = easeInOut(u);
+    x = r.x + (x - r.x) * e; y = r.y + (y - r.y) * e; nx = r.nx + (nx - r.nx) * e; ny = r.ny + (ny - r.ny) * e; tx = r.tx + (tx - r.tx) * e; ty = r.ty + (ty - r.ty) * e;
+    lat = Math.sign(c.lane - c.changeFrom) * Math.sin(Math.PI * u) * .55; hop = Math.sin(Math.PI * u);
   }
-  const q = rsPoint(h, rcFor(h), p);
-  o.x = CX + q.x; o.y = CY + q.y; o.nx = q.nx; o.ny = q.ny;
-  o.a = Math.atan2(q.ty * c.sign + q.ny * lat, q.tx * c.sign + q.nx * lat);
+  o.x = CX + x; o.y = CY + y; o.nx = nx; o.ny = ny; o.hop = hop;
+  o.a = Math.atan2(ty * c.sign + ny * lat, tx * c.sign + nx * lat);
   return o;
 }
-// 3D car bodies: extruded footprints with back-face culling, simple directional shading and a
-// ground shadow. Capsule for the player, angular wedge for the fleet.
-const FOOT_P = (() => { const a = []; for (let i = 0; i <= 6; i++) { const t = -Math.PI / 2 + Math.PI * i / 6; a.push([8 + 9 * Math.cos(t), 9 * Math.sin(t)]); } for (let i = 0; i <= 6; i++) { const t = Math.PI / 2 + Math.PI * i / 6; a.push([-8 + 9 * Math.cos(t), 9 * Math.sin(t)]); } return a; })();
-const FOOT_E = [[21, 0], [-11, 12], [-18, 12], [-13, 0], [-18, -12], [-11, -12]];
-const _cw = [], _cb = [], _ct = [];
-function carWorld(foot, x, y, ang, k) {
-  const c = Math.cos(ang), s = Math.sin(ang);
-  for (let i = 0; i < foot.length; i++) { const u = foot[i][0] * k, v = foot[i][1] * k; _cw[i] = [x + u * c - v * s, y + u * s + v * c]; }
-  return foot.length;
+// Car models: hull, glass cabin, four wheels and trim, all extruded from footprints (back faces
+// culled, faces shaded by the key light), with head/tail lights that glow and reflect in the road.
+const CAR_M = {
+  player: {
+    hull: [[18.5, -5], [17, -8.4], [12.5, -9.6], [-14, -9.6], [-17.8, -8.2], [-19, -4.5], [-19, 4.5], [-17.8, 8.2], [-14, 9.6], [12.5, 9.6], [17, 8.4], [18.5, 5]],
+    hz: [2.2, 8.4], cab: [[6.5, -5.6], [6.5, 5.6], [-2, 7.3], [-10.5, 7], [-10.5, -7], [-2, -7.3]], cz: [8.4, 14],
+    wheels: [[11.5, 10], [11.5, -10], [-11.5, 10], [-11.5, -10]], top: [255, 243, 230], side: [210, 194, 176], glass: [28, 30, 48],
+  },
+  enemy: {
+    hull: [[21, 0], [15.5, -7.2], [-12.5, -11.5], [-18, -9.6], [-18, 9.6], [-12.5, 11.5], [15.5, 7.2]],
+    hz: [2.2, 8.8], cab: [[4.5, -6.2], [4.5, 6.2], [-8.5, 8.2], [-14, 7.3], [-14, -7.3], [-8.5, -8.2]], cz: [8.8, 14.4],
+    wheels: [[10.5, 9.8], [10.5, -9.8], [-12, 11.2], [-12, -11.2]], top: [61, 232, 255], side: [24, 150, 174], glass: [10, 34, 46],
+  },
+};
+const WHEEL = [[4, -1.7], [4, 1.7], [-4, 1.7], [-4, -1.7]];
+const _w = [], _b = [], _t = [];
+// Extrude a footprint (local u forward, v left) at (x, y), heading (c, s), scale k, from z0 to z1.
+function prism(g, foot, x, y, c, s, k, z0, z1, top, side, dx, noTop) {
+  const n = foot.length, camX = CX, camY = CY + CAM.D * CAM.sa;
+  let cxm = 0, cym = 0;
+  for (let i = 0; i < n; i++) {
+    const u = foot[i][0] * k, v = foot[i][1] * k, wx = x + u * c - v * s, wy = y + u * s + v * c;
+    _w[i] = [wx, wy]; cxm += wx; cym += wy;
+    const b = pj(wx, wy, z0); _b[i] = [b.x + dx, b.y]; const t = pj(wx, wy, z1); _t[i] = [t.x + dx, t.y];
+  }
+  cxm /= n; cym /= n;
+  if (side) for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n, ex = _w[j][0] - _w[i][0], ey = _w[j][1] - _w[i][1];
+    let nx = ey, ny = -ex; const mx = (_w[i][0] + _w[j][0]) / 2, my = (_w[i][1] + _w[j][1]) / 2;
+    if (nx * (mx - cxm) + ny * (my - cym) < 0) { nx = -nx; ny = -ny; }
+    if (nx * (camX - mx) + ny * (camY - my) <= 0) continue;
+    const L = Math.hypot(nx, ny) || 1, sh = .5 + .62 * LIT(nx / L, ny / L);
+    g.fillStyle = `rgb(${Math.min(255, Math.round(side[0] * sh))},${Math.min(255, Math.round(side[1] * sh))},${Math.min(255, Math.round(side[2] * sh))})`;
+    g.beginPath(); g.moveTo(_b[i][0], _b[i][1]); g.lineTo(_b[j][0], _b[j][1]); g.lineTo(_t[j][0], _t[j][1]); g.lineTo(_t[i][0], _t[i][1]); g.closePath(); g.fill();
+  }
+  if (noTop) return;
+  g.beginPath(); for (let i = 0; i < n; i++) g.lineTo(_t[i][0], _t[i][1]); g.closePath();
+  if (top) { g.fillStyle = top; g.fill(); }
 }
+const rgb = (a, m = 1) => `rgb(${Math.round(a[0] * m)},${Math.round(a[1] * m)},${Math.round(a[2] * m)})`;
 function drawCar3D(g, x, y, ang, kind, o) {
-  const os = (V.os || 1) * (kind === 'player' ? 1.15 : 1), foot = kind === 'player' ? FOOT_P : FOOT_E, n = carWorld(foot, x, y, ang, os), up = (kind === 'player' ? 10 : 12) * os;
-  if (kind === 'player' && !o.ghost && !o.color && !o.char) {        // your car: halo ring + headlight beams on the ground
+  const M = CAR_M[kind === 'player' ? 'player' : 'enemy'], os = (V.os || 1) * (kind === 'player' ? 1.12 : 1), c = Math.cos(ang), s = Math.sin(ang);
+  const lift = (o.z || 0) + (o.hop || 0) * 7 * os, dx = o.dx || 0, alpha = o.alpha == null ? 1 : o.alpha, sc = o.scale || 1, k = os * sc;
+  const at = (u, v, h) => pj(x + (u * c - v * s) * k, y + (u * s + v * c) * k, h * k + lift);
+  if (kind === 'player' && !o.ghost && !o.color && !o.char && !o.noFx) {       // your car: halo ring + headlight beams on the ground
     const t = performance.now() / 1000, pr = V.rm ? .5 : .5 + .5 * Math.sin(t * 5);
     g.strokeStyle = `rgba(255,243,230,${(.28 + .22 * pr).toFixed(3)})`; g.lineWidth = 2.5 * CAM.sc;
     g.beginPath(); groundCircle(g, x, y, (28 + 3 * pr) * os, 0, Math.PI * 2, .4); g.stroke();
-    const c0 = Math.cos(ang), s0 = Math.sin(ang), beam = (u, v) => pj(x + u * c0 - v * s0, y + u * s0 + v * c0, .3);
-    g.globalCompositeOperation = 'lighter'; g.fillStyle = 'rgba(255,243,210,.13)';
-    for (const sv of [-1, 1]) { g.beginPath(); let q = beam(17 * os, 5 * sv * os); g.moveTo(q.x, q.y); q = beam(62 * os, (5 + 16) * sv * os); g.lineTo(q.x, q.y); q = beam(62 * os, (5 - 10) * sv * os); g.lineTo(q.x, q.y); g.closePath(); g.fill(); }
+    const beam = (u, v) => pj(x + (u * c - v * s) * os, y + (u * s + v * c) * os, .3);
+    g.globalCompositeOperation = 'lighter'; g.fillStyle = 'rgba(255,243,210,.12)';
+    for (const sv of [-1, 1]) { g.beginPath(); let q = beam(18, 5 * sv); g.moveTo(q.x, q.y); q = beam(66, 22 * sv); g.lineTo(q.x, q.y); q = beam(66, -6 * sv); g.lineTo(q.x, q.y); g.closePath(); g.fill(); }
     g.globalCompositeOperation = 'source-over';
   }
-  const cm = 1 - .72 * (o.char || 0);                       // charred after a crash
-  const top = (o.color || (kind === 'player' ? [255, 243, 230] : [61, 232, 255])).map(v => Math.round(v * cm));
-  const side = (kind === 'player' ? [196, 178, 160] : [22, 150, 172]).map(v => Math.round(v * cm));
-  const alpha = o.alpha == null ? 1 : o.alpha, dx = o.dx || 0;
-  // shadow + glow on the ground
-  const gp = pj(x + 5 * os, y + 4 * os, 0), gk = gp.k * os, gx = gp.x, gy = gp.y;
+  const cm = 1 - .72 * (o.char || 0), top = (o.color || M.top).map(v => v * cm), side = (o.color ? o.color.map(v => v * .7) : M.side).map(v => v * cm);
+  // shadow (cast to the right, fading as the car lifts) and ground glow
   if (!o.ghost) {
-    g.globalAlpha = .9 * alpha; g.drawImage(V.sp.shadow, gx - 26 * gk, gy - 26 * gk * CAM.ca, 52 * gk, 52 * gk * CAM.ca);
-    if (o.glow > 0) { g.globalCompositeOperation = 'lighter'; g.globalAlpha = o.glow; const sp = o.glowSprite || V.sp.glowR; g.drawImage(sp, gx - 50 * gk, gy - 50 * gk * CAM.ca, 100 * gk, 100 * gk * CAM.ca); g.globalCompositeOperation = 'source-over'; }
+    const sgp = pj(x + (5 + SHADOW.x * 10) * k + SHADOW.x * lift, y + (SHADOW.y * 10) * k + SHADOW.y * lift, 0), gk = sgp.k * k, fall = 1 / (1 + lift / 40);
+    g.globalAlpha = .95 * alpha * fall; g.drawImage(V.sp.shadow, sgp.x - 27 * gk, sgp.y - 27 * gk * CAM.ca, 54 * gk, 54 * gk * CAM.ca);
+    if (o.glow > 0) { const gp = pj(x, y, 0); g.globalCompositeOperation = 'lighter'; g.globalAlpha = o.glow * alpha * fall; const sp = o.glowSprite || V.sp.glowR; g.drawImage(sp, gp.x - 50 * gp.k * os, gp.y - 50 * gp.k * os * CAM.ca, 100 * gp.k * os, 100 * gp.k * os * CAM.ca); g.globalCompositeOperation = 'source-over'; }
+    g.globalAlpha = 1;
   }
-  for (let i = 0; i < n; i++) { const b = pj(_cw[i][0], _cw[i][1], .5); _cb[i] = [b.x + dx, b.y]; const t = pj(_cw[i][0], _cw[i][1], up); _ct[i] = [t.x + dx, t.y]; }
+  if (o.ghost) {
+    g.globalAlpha = alpha;
+    prism(g, M.hull, x, y, c, s, k, M.hz[1] * k + lift, M.hz[1] * k + lift, null, null, dx, true);
+    g.beginPath(); for (let i = 0; i < M.hull.length; i++) g.lineTo(_t[i][0], _t[i][1]); g.closePath();
+    g.strokeStyle = 'rgba(255,243,230,.8)'; g.lineWidth = 1.6 * V.dpr; g.setLineDash([4 * V.dpr, 3 * V.dpr]); g.stroke(); g.setLineDash([]); g.fillStyle = 'rgba(255,243,230,.12)'; g.fill();
+    g.globalAlpha = 1; return;
+  }
   g.globalAlpha = alpha;
-  const camX = CX, camY = CY + CAM.D * CAM.sa;
-  let cxm = 0, cym = 0; for (let i = 0; i < n; i++) { cxm += _cw[i][0]; cym += _cw[i][1]; } cxm /= n; cym /= n;
-  if (!o.ghost) for (let i = 0; i < n; i++) {
-    const j = (i + 1) % n, ex = _cw[j][0] - _cw[i][0], ey = _cw[j][1] - _cw[i][1];
-    let nx = ey, ny = -ex; const mx = (_cw[i][0] + _cw[j][0]) / 2, my = (_cw[i][1] + _cw[j][1]) / 2;
-    if (nx * (mx - cxm) + ny * (my - cym) < 0) { nx = -nx; ny = -ny; }
-    if (nx * (camX - mx) + ny * (camY - my) <= 0) continue;
-    const L = Math.hypot(nx, ny) || 1, sh = .55 + .45 * Math.max(0, (-.45 * nx + .9 * ny) / L);
-    g.fillStyle = `rgb(${Math.round(side[0] * sh)},${Math.round(side[1] * sh)},${Math.round(side[2] * sh)})`;
-    g.beginPath(); g.moveTo(_cb[i][0], _cb[i][1]); g.lineTo(_cb[j][0], _cb[j][1]); g.lineTo(_ct[j][0], _ct[j][1]); g.lineTo(_ct[i][0], _ct[i][1]); g.closePath(); g.fill();
-  }
-  g.beginPath(); for (let i = 0; i < n; i++) g.lineTo(_ct[i][0], _ct[i][1]); g.closePath();
-  if (o.ghost) { g.strokeStyle = 'rgba(255,243,230,.8)'; g.lineWidth = 1.6 * V.dpr; g.setLineDash([4 * V.dpr, 3 * V.dpr]); g.stroke(); g.setLineDash([]); g.fillStyle = 'rgba(255,243,230,.12)'; g.fill(); g.globalAlpha = 1; return; }
-  g.fillStyle = `rgb(${top[0]},${top[1]},${top[2]})`; g.fill();
+  const Z = z => z * k + lift;
+  // wheels on the far side, then the hull, then the near wheels
+  const tyre = [18, 18, 24], rim = [52, 54, 66];
+  const wheel = (wu, wv) => { const wx = x + (wu * c - wv * s) * k, wy = y + (wu * s + wv * c) * k; prism(g, WHEEL, wx, wy, c, s, k, Z(0) + .01, Z(6), rgb(rim), tyre, dx); };
+  const near = M.wheels.filter(w => (w[0] * s + w[1] * c) > 0), far = M.wheels.filter(w => (w[0] * s + w[1] * c) <= 0);
+  for (const w of far) wheel(w[0], w[1]);
+  prism(g, M.hull, x, y, c, s, k, Z(M.hz[0]), Z(M.hz[1]), rgb(top), side, dx);
   if (Settings.hc) { g.strokeStyle = kind === 'player' ? '#E01E2B' : '#000'; g.lineWidth = 2 * V.dpr; g.stroke(); }
-  // top details (drawn on the roof plane)
-  const c = Math.cos(ang), s = Math.sin(ang);
-  const roof = (u, v) => { u *= os; v *= os; return pj(x + u * c - v * s, y + u * s + v * c, up + .2); };
-  const poly = pts => { g.beginPath(); for (const [u, v] of pts) { const q = roof(u, v); g.lineTo(q.x + dx, q.y); } g.closePath(); };
-  if (kind === 'player') {
-    if (!o.color) { poly([[-17, -3], [16, -3], [16, 3], [-17, 3]]); g.fillStyle = '#E01E2B'; g.fill(); }   // racing stripe
-    poly([[10, -6.5], [3, -6.5], [3, 6.5], [10, 6.5]]); g.fillStyle = 'rgba(11,11,16,.85)'; g.fill();
-    poly([[-17, -8], [-14, -8], [-14, -4.5], [-17, -4.5]]); g.fillStyle = '#E01E2B'; g.fill();
-    poly([[-17, 4.5], [-14, 4.5], [-14, 8], [-17, 8]]); g.fill();
-    poly([[15.5, -7], [17.5, -6], [17.5, -3.5], [15.5, -3.5]]); g.fillStyle = '#FFFBE8'; g.fill();
-    poly([[15.5, 3.5], [17.5, 3.5], [17.5, 6], [15.5, 7]]); g.fill();
-  } else {
-    if (!o.color) {                  // blinking roof beacon marks a crash car
-      const on = (Math.floor(performance.now() / 220) & 1) === 0, q = roof(-6, 0);
-      g.fillStyle = on ? '#FF3B47' : '#E6FCFF'; g.beginPath(); g.arc(q.x + dx, q.y - 1.5 * gk, 2.6 * gk, 0, Math.PI * 2); g.fill();
-      g.globalCompositeOperation = 'lighter'; g.globalAlpha = .5; g.drawImage(on ? V.sp.glowR : V.sp.glowC, q.x + dx - 12 * gk, q.y - 13 * gk, 24 * gk, 24 * gk); g.globalAlpha = alpha; g.globalCompositeOperation = 'source-over';
-    }
-    g.strokeStyle = 'rgba(8,20,26,.85)'; g.lineWidth = 2.4 * gk / 1.2; g.lineJoin = 'round';
-    const chev = cx => { g.beginPath(); for (const [u, v] of [[cx - 5, -6], [cx, 0], [cx - 5, 6]]) { const q = roof(u, v); g.lineTo(q.x + dx, q.y); } g.stroke(); };
+  for (const w of near) wheel(w[0], w[1]);
+  const roof = (u, v, h) => { const q = at(u, v, h); return [q.x + dx, q.y]; };
+  const poly = (pts, h) => { g.beginPath(); for (const [u, v] of pts) { const q = roof(u, v, h); g.lineTo(q[0], q[1]); } g.closePath(); };
+  if (kind === 'player' && !o.color) { poly([[-18.5, -2.2], [18, -2.2], [18, 2.2], [-18.5, 2.2]], M.hz[1] + .1); g.fillStyle = rgb([224, 30, 43], cm); g.fill(); }   // racing stripe on the hood
+  if (kind !== 'player' && !o.color) {                    // hood chevrons mark the car type
+    g.strokeStyle = 'rgba(6,26,34,.85)'; g.lineWidth = 2.2 * pj(x, y, 0).k * os / 1.2; g.lineJoin = 'round';
+    const chev = cu => { g.beginPath(); for (const [u, v] of [[cu - 4, -5], [cu, 0], [cu - 4, 5]]) { const q = roof(u, v, M.hz[1] + .1); g.lineTo(q[0], q[1]); } g.stroke(); };
     const t = o.type;
-    if (t === 'chaser') chev(4);
-    else if (t === 'interceptor') { chev(1); chev(8); }
-    else if (t === 'splitter') { chev(4); g.beginPath(); let q = roof(-12, 0); g.moveTo(q.x + dx, q.y); q = roof(-4, 0); g.lineTo(q.x + dx, q.y); g.stroke(); }
-    else if (t === 'pacer') { for (const u of [-6, 2]) { g.beginPath(); let q = roof(u, -6); g.moveTo(q.x + dx, q.y); q = roof(u, 6); g.lineTo(q.x + dx, q.y); g.stroke(); } }
-    else if (t === 'hunter') { chev(-2); chev(4); chev(10); }
+    if (t === 'chaser') chev(13);
+    else if (t === 'interceptor') { chev(10); chev(15.5); }
+    else if (t === 'splitter') { chev(14); g.beginPath(); let q = roof(6, 0, M.hz[1] + .1); g.moveTo(q[0], q[1]); q = roof(11, 0, M.hz[1] + .1); g.lineTo(q[0], q[1]); g.stroke(); }
+    else if (t === 'pacer') { for (const u of [8, 13]) { g.beginPath(); let q = roof(u, -5, M.hz[1] + .1); g.moveTo(q[0], q[1]); q = roof(u, 5, M.hz[1] + .1); g.lineTo(q[0], q[1]); g.stroke(); } }
+    else if (t === 'hunter') { chev(8); chev(12.5); chev(17); }
+  }
+  // glass cabin with a windscreen highlight
+  const glass = o.color ? o.color.map(v => v * .35) : M.glass;
+  prism(g, M.cab, x, y, c, s, k, Z(M.cz[0]), Z(M.cz[1]), rgb(glass, cm * 1.25), glass.map(v => v * 1.6 * cm), dx);
+  if (!o.char) {
+    const f = M.cab[0][0];
+    poly([[f - .5, -4.8], [f - .5, 4.8], [f - 4.5, 5.6], [f - 4.5, -5.6]], M.cz[1] + .1); g.fillStyle = 'rgba(190,220,255,.32)'; g.fill();
+  }
+  if (kind === 'player' && !o.color) {
+    poly([[-10.5, -1.8], [6.5, -1.8], [6.5, 1.8], [-10.5, 1.8]], M.cz[1] + .12); g.fillStyle = rgb([224, 30, 43], cm); g.fill();
+    prism(g, [[-15.5, -9.4], [-13.5, -9.4], [-13.5, 9.4], [-15.5, 9.4]], x, y, c, s, k, Z(12.2), Z(14), rgb([224, 30, 43], cm * .9), [140, 20, 28].map(v => v * cm), dx);   // spoiler
+  }
+  // lights: head and tail (player), headlights + roof light bar (fleet)
+  if (!o.char && !o.color) {
+    g.globalCompositeOperation = 'lighter';
+    const spr = (sp, u, v, h, r, a) => { const q = at(u, v, h), R = r * q.k * os; g.globalAlpha = a * alpha; g.drawImage(sp, q.x + dx - R, q.y - R, R * 2, R * 2); };
+    const hu = M.hull[0][0] - .5;
+    spr(V.sp.head, hu, -5, 5.5, 5, .95); spr(V.sp.head, hu, 5, 5.5, 5, .95);
+    spr(V.sp.head, hu + 4, -5, -4, 7, .22); spr(V.sp.head, hu + 4, 5, -4, 7, .22);                       // reflection in the road
+    if (kind === 'player') { spr(V.sp.tail, -19, -6.5, 5.5, 4, .9); spr(V.sp.tail, -19, 6.5, 5.5, 4, .9); }
+    else {
+      const on = (Math.floor(performance.now() / 200) & 1) === 0;
+      spr(on ? V.sp.tail : V.sp.glowB, -4, -3.4, 15.8, 6, 1); spr(on ? V.sp.glowB : V.sp.tail, -4, 3.4, 15.8, 6, 1);
+    }
+    if (o.od) { const fl = .8 + .4 * Math.random(); spr(V.sp.fire, -22 - 3 * fl, 0, 4, 9 * fl, .85); }
+    g.globalAlpha = alpha; g.globalCompositeOperation = 'source-over';
+    if (kind !== 'player') {                               // the light bar itself
+      const on = (Math.floor(performance.now() / 200) & 1) === 0;
+      prism(g, [[-2.5, -5.5], [-5.5, -5.5], [-5.5, -.4], [-2.5, -.4]], x, y, c, s, k, Z(M.cz[1]), Z(M.cz[1] + 1.8), on ? '#FF4757' : '#5A1820', [120, 20, 30], dx);
+      prism(g, [[-2.5, .4], [-5.5, .4], [-5.5, 5.5], [-2.5, 5.5]], x, y, c, s, k, Z(M.cz[1]), Z(M.cz[1] + 1.8), on ? '#1B2A6B' : '#5B7CFF', [30, 40, 120], dx);
+    }
   }
   g.globalAlpha = 1;
 }
@@ -1750,6 +2116,15 @@ function spawnSparks(x, y, n, color, speed = 260) {
     const a = Math.random() * Math.PI * 2, v = speed * (.4 + Math.random() * .8);
     V.parts.push({ x, y, z: 14, vx: Math.cos(a) * v, vy: Math.sin(a) * v, vz: 60 + Math.random() * 120, life: .35 + Math.random() * .25, t: 0, color });
   }
+}
+// Soft puffs (tyre smoke, landing dust, warp poofs): view-only, drawn with the depth-sorted objects.
+function spawnPuffs(x, y, n, o = {}) {
+  if (V.rm || V.fxq < 1 && n > 2) n = Math.min(n, 2);
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, v = (o.speed || 40) * (.4 + Math.random() * .8);
+    V.puffs.push({ x: x + (o.dx || 0), y: y + (o.dy || 0), z: o.z || 4, vx: Math.cos(a) * v + (o.vx || 0), vy: Math.sin(a) * v + (o.vy || 0), vz: o.vz || 18, r: (o.r || 10) * (.7 + Math.random() * .6), grow: o.grow || 26, t: 0, life: (o.life || .6) * (.7 + Math.random() * .6), sp: o.sp || V.sp.smoke, a: o.a || .7 });
+  }
+  if (V.puffs.length > 90) V.puffs.splice(0, V.puffs.length - 90);
 }
 function floater(text, x, y, color) { V.floaters.push({ text, x, y, t: 0, color: color || '#FFF3E6' }); if (V.floaters.length > 4) V.floaters.shift(); }
 
@@ -1793,7 +2168,7 @@ function nextOpenGap(S, d) {
 }
 // Countdown ring lying on the next usable gap, draining to the cutoff.
 function drawRing(g, S, d, human) {
-  const D = DIFFS[S.diff], ng = nextOpenGap(S, d), g0 = ng.g, q = rsPoint(H[d.lane], RC[d.lane], g0), x = CX + q.x, y = CY + q.y, s = CAM.sc;
+  const D = DIFFS[S.diff], ng = nextOpenGap(S, d), g0 = ng.g, q = trackPoint(H[d.lane], g0), x = CX + q.x, y = CY + q.y, s = CAM.sc;
   const beat = .25 / (lpsOf(S, d) * S.ts), ttg = ttgReal(S, d) + ng.j * beat, cut = D.cutoff / 1000;
   const f = clamp((ttg - cut) / Math.max(.001, beat * (ng.j + 1) - cut), 0, 1);
   g.lineWidth = 4 * s; g.strokeStyle = 'rgba(255,255,255,.14)';
@@ -1823,8 +2198,8 @@ function drawTelegraph(g, S, e, pos) {
     g.stroke();
   }
   if (e.type === 'interceptor' && e.dec[0]) {            // intent arrow at the gap it will turn at
-    const g0 = nextGapP(e), tl = clampLane(e.lane + e.dec[0]), a = rsPoint(H[e.lane], RC[e.lane], g0), ax = CX + a.x, ay = CY + a.y;
-    const b = rsPoint(H[tl], RC[tl], g0), bx = CX + b.x, by = CY + b.y, ux = (bx - ax) / 80, uy = (by - ay) / 80;
+    const g0 = nextGapP(e), tl = clampLane(e.lane + e.dec[0]), a = trackPoint(H[e.lane], g0), ax = CX + a.x, ay = CY + a.y;
+    const b = trackPoint(H[tl], g0), bx = CX + b.x, by = CY + b.y, L = Math.hypot(bx - ax, by - ay) || 1, ux = (bx - ax) / L, uy = (by - ay) / L;
     g.strokeStyle = 'rgba(61,232,255,.8)'; g.lineWidth = 3 * s;
     g.beginPath();
     let o = pj(ax, ay, 2); g.moveTo(o.x, o.y); o = pj(bx, by, 2); g.lineTo(o.x, o.y);
@@ -1863,10 +2238,18 @@ function drawScore(g, S) {
   else { val = fmt(S.score); if (S.mult > 1) sub = '×' + S.mult.toFixed(2); }
   const size = Math.min(34, 150 / Math.max(3, val.length)) * k;
   g.textAlign = 'center'; g.textBaseline = 'middle';
-  g.font = `400 ${size}px "Press Start 2P", ui-monospace, monospace`;
-  const cs = 2.2 * V.dpr;                    // RGB split: magenta and cyan ghosts behind the white
-  g.globalCompositeOperation = 'lighter'; g.fillStyle = 'rgba(255,42,109,.85)'; g.fillText(val, x - cs, y); g.fillStyle = 'rgba(5,217,232,.85)'; g.fillText(val, x + cs, y); g.globalCompositeOperation = 'source-over';
-  g.save(); g.shadowColor = 'rgba(185,103,255,.8)'; g.shadowBlur = 16 * V.dpr; g.fillStyle = '#FFFFFF'; g.fillText(val, x, y); g.restore();
+  // RGB split (magenta and cyan ghosts behind the white), cached until the value or size changes
+  const key = val + '|' + size.toFixed(1);
+  if (!V.scoreC || V.scoreC.key !== key) {
+    const cs = 2.2 * V.dpr, f = `400 ${size}px "Press Start 2P", ui-monospace, monospace`, mg = V.scoreC ? V.scoreC.g : null;
+    const c = V.scoreC ? V.scoreC.c : mkCanvas(1), cg = mg || c.getContext('2d');
+    cg.font = f; const w = Math.ceil(cg.measureText(val).width + cs * 2 + 8), h = Math.ceil(size * 1.4);
+    c.width = w; c.height = h; cg.font = f; cg.textAlign = 'center'; cg.textBaseline = 'middle';
+    cg.globalCompositeOperation = 'lighter'; cg.fillStyle = 'rgba(255,42,109,.85)'; cg.fillText(val, w / 2 - cs, h / 2); cg.fillStyle = 'rgba(5,217,232,.85)'; cg.fillText(val, w / 2 + cs, h / 2);
+    cg.globalCompositeOperation = 'source-over'; cg.fillStyle = '#FFFFFF'; cg.fillText(val, w / 2, h / 2);
+    V.scoreC = { key, c, g: cg, w, h };
+  }
+  g.drawImage(V.scoreC.c, x - V.scoreC.w / 2, y - V.scoreC.h / 2);
   if (sub) {
     const sc = camp ? 1 : 1 + clamp(V.spring.x, -.5, 1) * .12;
     g.save(); g.translate(x, y + size * .72); g.scale(sc, sc);
@@ -1875,33 +2258,155 @@ function drawScore(g, S) {
   }
 }
 
+/* ---- level-up warp (Endless): the old map exits down a warp pipe, the new one drops in ----
+   Timeline (seconds from the warp start; the sim is frozen throughout):
+   exit  0 → e0   old map: rivals poof, gems fly to you, a pipe rises under your car, you dive in,
+                  the camera pushes in and an iris closes on you
+   card  e0 → e1  "LEVEL n" with the new map spinning in over racing stars (the swap happens here)
+   enter e1 → e2  the iris opens on the new map, which settles with a bump; the pipe rises, your car
+                  pops out with a spin, rivals drop from the sky, gems pop in, READY? … GO!   */
+function warpPhase(S, alpha) {
+  const W = S.warp;
+  if (!W) return null;
+  const u = Math.max(0, (S.tick - 1 + alpha - W.t0) / HZ), e0 = (W.swap - W.t0) / HZ, e1 = (W.go - W.t0) / HZ, e2 = (W.end - W.t0) / HZ;
+  return { u, e0, e1, e2, v: u - e1, ph: u < e0 ? 'exit' : u < e1 ? 'card' : 'enter' };
+}
+// Warp pipe standing on the road at (x, y), ph units tall. Returns the opening for clipping.
+function drawPipe(g, x, y, ph, hue) {
+  const r = 30 * (V.os || 1), b = pj(x, y, 0, {}), t = pj(x, y, ph, {});
+  const rx0 = r * b.k, ry0 = rx0 * CAM.ca, rx1 = r * t.k, ry1 = rx1 * CAM.ca;
+  const gr = g.createLinearGradient(t.x - rx1, 0, t.x + rx1, 0);
+  gr.addColorStop(0, `hsl(${hue},70%,16%)`); gr.addColorStop(.28, `hsl(${hue},85%,48%)`); gr.addColorStop(.42, `hsl(${hue},95%,74%)`); gr.addColorStop(.6, `hsl(${hue},80%,40%)`); gr.addColorStop(1, `hsl(${hue},70%,12%)`);
+  g.fillStyle = gr;
+  g.beginPath(); g.moveTo(t.x + rx1, t.y); g.lineTo(b.x + rx0, b.y); g.ellipse(b.x, b.y, rx0, ry0, 0, 0, Math.PI); g.lineTo(t.x - rx1, t.y); g.ellipse(t.x, t.y, rx1, ry1, 0, Math.PI, 0, true); g.closePath(); g.fill();
+  g.fillStyle = `hsl(${hue},100%,82%)`; g.beginPath(); g.ellipse(t.x, t.y, rx1 * 1.14, ry1 * 1.14, 0, 0, Math.PI * 2); g.fill();
+  g.fillStyle = '#05030A'; g.beginPath(); g.ellipse(t.x, t.y, rx1 * .86, ry1 * .86, 0, 0, Math.PI * 2); g.fill();
+  g.globalCompositeOperation = 'lighter'; g.globalAlpha = .55;
+  g.drawImage(V.sp.glowW, t.x - rx1 * 1.6, t.y - ry1 * 1.6, rx1 * 3.2, ry1 * 3.2);
+  g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+  return { x: t.x, y: t.y, rx: rx1, ry: ry1 };
+}
+function pipeLip(g, o, hue) {              // front half of the rim, drawn over a car inside the pipe
+  g.fillStyle = `hsl(${hue},100%,82%)`;
+  g.beginPath(); g.ellipse(o.x, o.y, o.rx * 1.14, o.ry * 1.14, 0, 0, Math.PI); g.ellipse(o.x, o.y, o.rx * .86, o.ry * .86, 0, Math.PI, 0, true); g.closePath(); g.fill();
+}
+// Big arcade text with an RGB split, in device pixels.
+function arcadeText(g, text, x, y, size, col, scale = 1, alpha = 1) {
+  if (alpha <= 0 || scale <= 0) return;
+  g.save(); g.translate(x, y); g.scale(scale, scale); g.globalAlpha = alpha;
+  g.font = `400 ${size}px "Press Start 2P", ui-monospace, monospace`; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.lineJoin = 'round'; g.lineWidth = size * .28; g.strokeStyle = 'rgba(8,4,18,.9)'; g.strokeText(text, 0, 0);
+  const cs = Math.max(2, size * .06);
+  g.globalCompositeOperation = 'lighter'; g.fillStyle = 'rgba(255,42,109,.9)'; g.fillText(text, -cs, 0); g.fillStyle = 'rgba(5,217,232,.9)'; g.fillText(text, cs, 0); g.globalCompositeOperation = 'source-over';
+  g.fillStyle = col; g.fillText(text, 0, 0);
+  g.restore();
+}
+function warpSubtitle(w) {
+  const st = w.step || {};
+  if (st.tier != null) return [DIFFS[st.tier].name.toUpperCase() + (st.tier === 3 ? '!' : ''), `${w.bpm} BPM`];
+  if (st.spawn) return ['NEW RIVAL', FLEET[st.spawn].name.toUpperCase()];
+  if (st.upgrade) return ['RIVAL UPGRADE', FLEET[st.upgrade[1]].name.toUpperCase()];
+  if (st.bpm) return ['FASTER', `${w.bpm} BPM`];
+  return ['NEW TRACK', ''];
+}
+// The new map as a spinning neon outline for the stage card.
+function drawMiniMap(g, S, cx, cy, sc, yaw, alpha, t) {
+  const c = Math.cos(yaw), s = Math.sin(yaw), ct = .56, hue = V.hue;
+  const P = (x, y) => { const X = x * c - y * s, Y = x * s + y * c; return [cx + X * sc, cy + Y * ct * sc]; };
+  g.save(); g.globalAlpha = alpha; g.lineCap = 'round'; g.lineJoin = 'round';
+  const q = {};
+  for (let w = 0; w < 5; w++) {
+    const hw = WALL_H[w], cv = curveOf(GEO, hw), edgeW = w === 0 || w === 4;
+    for (let k = 0; k < 4; k++) {
+      const oa = !edgeW && S.gapOpen[w - 1][k], ob = !edgeW && S.gapOpen[w - 1][(k + 1) % 4], gh = 50 / (4 * cv.ql[k]);
+      const pa = k / 4 + (oa ? gh : 0), pb = (k + 1) / 4 - (ob ? gh : 0);
+      g.beginPath();
+      for (let i = 0; i <= 28; i++) { trackPoint(hw, pa + (pb - pa) * i / 28, q); const [X, Y] = P(q.x, q.y); if (i) g.lineTo(X, Y); else g.moveTo(X, Y); }
+      g.strokeStyle = neonOf(hue, .35); g.lineWidth = 7 * V.dpr; g.stroke();
+      g.strokeStyle = neonOf(hue, 1); g.lineWidth = 2.4 * V.dpr; g.stroke();
+    }
+  }
+  for (let l = 0; l < 4; l++) {
+    g.beginPath();
+    for (let i = 0; i <= 120; i++) { trackPoint(H[l], i / 120, q); const [X, Y] = P(q.x, q.y); if (i) g.lineTo(X, Y); else g.moveTo(X, Y); }
+    g.setLineDash([3 * V.dpr, 7 * V.dpr]); g.strokeStyle = 'rgba(255,255,255,.28)'; g.lineWidth = 1.5 * V.dpr; g.stroke(); g.setLineDash([]);
+  }
+  const Pl = S.player; trackPoint(H[Pl.lane], Pl.p, q); const [X, Y] = P(q.x, q.y), pr = V.rm ? 1 : 1 + .3 * Math.sin(t * 9);
+  g.globalCompositeOperation = 'lighter'; g.drawImage(V.sp.glowW, X - 22 * V.dpr * pr, Y - 22 * V.dpr * pr, 44 * V.dpr * pr, 44 * V.dpr * pr); g.globalCompositeOperation = 'source-over';
+  g.fillStyle = '#FFF3E6'; g.beginPath(); g.arc(X, Y, 5 * V.dpr, 0, Math.PI * 2); g.fill();
+  g.restore();
+}
+function drawWarpCard(g, S, W, t) {
+  const w = V.wfx || {}, u = W.u - W.e0, D = W.e1 - W.e0, cx = V.W / 2, R = Math.hypot(V.W, V.H) / 2, hue = V.hue, dpr = V.dpr;
+  const fade = 1 - clamp((u - (D - .12)) / .12, 0, 1);
+  g.save(); g.globalAlpha = fade;
+  const Rb = Math.min(V.W, V.H) * .5 + Math.abs(V.W - V.H) * .25, bg = g.createRadialGradient(cx, V.H / 2, 0, cx, V.H / 2, Rb);   // fades out before the canvas edge
+  bg.addColorStop(0, `hsla(${hue},70%,16%,.95)`); bg.addColorStop(.55, 'rgba(8,6,16,.8)'); bg.addColorStop(1, 'rgba(8,6,16,0)');
+  g.fillStyle = bg; g.fillRect(0, 0, V.W, V.H);
+  if (w.stars) {                          // star streaks racing outward
+    g.globalCompositeOperation = 'lighter'; g.lineCap = 'round';
+    for (const sr of w.stars) {
+      const r0 = ((sr.r + (V.rm ? 0 : u * sr.v)) % 1) * R, r1 = r0 + (V.rm ? 2 : 10 + r0 * .18) * dpr, a = sr.a;
+      g.strokeStyle = sr.c; g.globalAlpha = fade * clamp(r0 / (R * .3), 0, 1); g.lineWidth = sr.w * dpr;
+      g.beginPath(); g.moveTo(cx + Math.cos(a) * r0, V.H / 2 + Math.sin(a) * r0); g.lineTo(cx + Math.cos(a) * r1, V.H / 2 + Math.sin(a) * r1); g.stroke();
+    }
+    g.globalAlpha = fade; g.globalCompositeOperation = 'source-over'; g.lineCap = 'butt';
+  }
+  const size = Math.min(V.W * .085, V.H * .075), ty = V.H * .2;
+  arcadeText(g, 'LEVEL ' + (w.level || S.level), cx, ty, size, '#FFFFFF', V.rm ? 1 : easeOutBack(clamp(u / .28, 0, 1)), 1);
+  const [sub1, sub2] = warpSubtitle(w);
+  const sa = clamp((u - .14) / .18, 0, 1);
+  arcadeText(g, sub1, cx, ty + size * 1.45, size * .42, '#FFD300', 1, sa);
+  if (sub2) arcadeText(g, sub2, cx, ty + size * 2.25, size * .3, '#05D9E8', 1, sa);
+  const mh = V.H * .5, st = CFG.STRETCH, sc = Math.min(V.W * .72 / (2 * EDGE_H), mh / (2 * (EDGE_H + st) * .56)), yaw = V.rm ? 0 : -.55 * (1 - easeOutCubic(clamp(u / .7, 0, 1))) + .06 * Math.sin(t * 1.3);
+  drawMiniMap(g, S, cx, V.H * .66, sc * (V.rm ? 1 : .8 + .2 * easeOutCubic(clamp(u / .5, 0, 1))), yaw, clamp((u - .08) / .2, 0, 1), t);
+  arcadeText(g, 'NEW TRACK', cx, V.H * .66 + (EDGE_H + st) * .56 * sc + size * .7, size * .26, 'rgba(255,255,255,.75)', 1, sa);
+  g.restore();
+}
+
 function renderMain(alpha, t) {
-  const S = App.S, g = V.g, st = App.state, P = S.player, s = CAM.sc;
+  const S = App.S, g = V.g, st = App.state, P = S.player, s = CAM.sc, dpr = V.dpr;
   g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, V.W, V.H);
   const CF = (st === 'crash' || (st === 'result' && App.crash)) ? crashFrame() : null;
-  const moving = st === 'live';
+  const moving = st === 'live', WP = warpPhase(S, alpha), wf = V.wfx || {};
+  if (WP && WP.ph === 'card') { drawWarpCard(g, S, WP, t); bloomPass(g); return; }
+  const tf = S.tick - 1 + alpha, pp = V.pp, hue = V.hue, os = V.os || 1;
+  carPos(P, interpP(P, 0, alpha), tf, pp);
+  const plx = pp.x, ply = pp.y, pla = pp.a, plHop = pp.hop, plnx = pp.nx, plny = pp.ny, foc = pj(plx, ply, 0, {});
+  const steer = !WP || (WP.ph === 'enter' && WP.v > .62);
   g.save();
   if (V.punch > 0 && !V.rm) { const c = pj(CX, CY, 0), z = 1 + .04 * easeOut(V.punch); g.translate(c.x, c.y); g.scale(z, z); g.translate(-c.x, -c.y); }
   if (CF && !V.rm) {           // crash camera: push in on the impact, rumble briefly, ease back for the rewind
     const c = pj(App.crash.cx, App.crash.cy, 0), cx0 = c.x, cy0 = c.y;
-    const inU = easeOut(clamp(CF.t / .22, 0, 1)), outU = easeInOut(clamp((CF.t - CFG.CRASH_FREEZE) / .5, 0, 1)), z = 1 + .03 * inU * (1 - outU);   // stays inside the board margin
-    const sh = CF.t < .45 ? (1 - CF.t / .45) * 7 * V.dpr : 0;
+    const inU = easeOut(clamp(CF.t / .22, 0, 1)), outU = easeInOut(clamp((CF.t - CFG.CRASH_FREEZE) / .5, 0, 1)), z = 1 + .03 * inU * (1 - outU);
+    const sh = CF.t < .45 ? (1 - CF.t / .45) * 7 * dpr : 0;
     g.translate(cx0 + Math.sin(t * 71) * sh, cy0 + Math.cos(t * 57) * sh); g.scale(z, z); g.translate(-cx0, -cy0);
   }
-  if (P.od && moving && !V.rm) drawShimmer(g, t); else g.drawImage(V.stat, 0, 0);
-  {                                // RGB rim: a colour-cycling neon edge around the board
-    const n = 72, off = V.rm ? 0 : t * 60;
-    g.lineWidth = 3.2 * s; g.lineCap = 'round'; g.globalCompositeOperation = 'lighter';
-    for (let i = 0; i < n; i++) { g.strokeStyle = `hsla(${Math.round(off + i * 360 / n) % 360},100%,62%,.85)`; g.beginPath(); pathRS(g, 476, i / n, (i + 1) / n, 0, true); g.stroke(); }
-    g.globalCompositeOperation = 'source-over'; g.lineCap = 'butt';
+  if (WP && !V.rm) {           // warp camera: push in on your car as you exit; the new map settles with a bump
+    const z = WP.ph === 'exit' ? 1 + .55 * easeInOut(clamp((WP.u - .42) / .5, 0, 1)) : 1 + .22 * (1 - easeOutBack(clamp(WP.v / .5, 0, 1)));
+    g.translate(foc.x, foc.y); g.scale(z, z); g.translate(-foc.x, -foc.y);
+  }
+  if (V.shake > 0 && !V.rm) g.translate(Math.sin(t * 83) * V.shake * dpr, Math.cos(t * 71) * V.shake * dpr);
+  if (P.od && moving && !WP && !V.rm) drawShimmer(g, t); else g.drawImage(V.stat, 0, 0);
+  {                                // RGB rim: a colour-cycling neon edge around the board (one conic-gradient stroke)
+    const off = V.rm ? 0 : t * 60;
+    g.lineWidth = 3.2 * s; g.globalCompositeOperation = 'lighter';
+    if (g.createConicGradient) {
+      const c0 = pj(CX, CY, 0, {}), cg = g.createConicGradient(off * Math.PI / 180, c0.x, c0.y);
+      for (let i = 0; i <= 12; i++) cg.addColorStop(i / 12, `hsla(${(360 - i * 30) % 360},100%,62%,.85)`);
+      g.strokeStyle = cg; g.stroke(V.trayPath);
+    } else {
+      const n = 36; g.lineCap = 'round';
+      for (let i = 0; i < n; i++) { g.strokeStyle = `hsla(${Math.round(off + i * 360 / n) % 360},100%,62%,.85)`; g.beginPath(); pathRS(g, EDGE_H, i / n, (i + 1) / n, 0, true); g.stroke(); }
+      g.lineCap = 'butt';
+    }
+    g.globalCompositeOperation = 'source-over';
     if (S.fx && S.fx.slow > S.tick) { g.fillStyle = 'rgba(80,120,255,.07)'; g.fill(V.trayPath); }
   }
   if (V.pulse > 0) { g.globalCompositeOperation = 'lighter'; g.globalAlpha = .08 * V.pulse * (Settings.hc ? 2 : 1); g.drawImage(V.glow, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = 'source-over'; }
-  // lane light: open lane (visual twin of its stem filter), stem intensity, clear/refill flashes
   g.globalCompositeOperation = 'lighter';
-  for (let l = 0; l < 4; l++) {       // your lane is lit a touch brighter (visual twin of its open stem)
-    const a = (l === P.lane ? .05 : 0) + S.stem[l] * .012;
-    if (a > .001) { g.fillStyle = `rgba(255,255,255,${a.toFixed(3)})`; g.fill(V.laneRib[l], 'evenodd'); }
+  if (steer) { g.fillStyle = 'rgba(255,255,255,.05)'; g.fill(V.laneRib[P.lane], 'evenodd'); }   // your lane is lit a touch brighter (visual twin of its open stem)
+  for (let l = 0; l < 4; l++) {
     const f = Math.max(0, 1 - (t - V.laneFx[l]) / .5) * .3;
     if (f > .001) { g.fillStyle = `rgba(255,194,71,${f.toFixed(3)})`; g.fill(V.laneRib[l], 'evenodd'); }
   }
@@ -1914,7 +2419,7 @@ function renderMain(alpha, t) {
     g.fillStyle = gr; g.fill(V.trayPath);
   }
   g.globalCompositeOperation = 'source-over';
-  if (!CF && V.door) {        // your exits: the doors you can take at your next usable gap pulse
+  if (!CF && V.door && steer) {        // your exits: the doors you can take at your next usable gap pulse
     const ng = nextOpenGap(S, P), gi = gapIdx(ng.g), pu = V.rm ? .6 : .5 + .5 * Math.sin(t * 5);
     g.globalCompositeOperation = 'lighter';
     for (const [c, d] of [[-1, P.lane - 1], [1, P.lane]]) {
@@ -1925,110 +2430,169 @@ function renderMain(alpha, t) {
   }
   drawCentreRings(g, S);
   if (CF && CF.t > .04) { const o = pj(App.crash.cx, App.crash.cy, .2), k = o.k; g.globalAlpha = Math.min(1, CF.t / .3) * .85; g.drawImage(V.sp.scorch, o.x - 80 * k, o.y - 80 * k * CAM.ca, 160 * k, 160 * k * CAM.ca); g.globalAlpha = 1; }
-  const tf = S.tick - 1 + alpha;
-  if (!CF) {
+  if (!CF && steer) {
     const hum = S.mode === 'hunter' ? [[P, 0], [S.enemies[0], 1]] : [[P, 0]];
     for (const [d, w] of hum) { drawRoute(g, S, d, interpP(d, d === P ? 0 : d.id, alpha), w); drawRing(g, S, d, w); }
   }
-  // gather depth-sorted objects: markers, cars, ghost
-  const objs = [], pp = V.pp;
-  for (let l = 0; l < 4; l++) for (const gm of S.mk[l]) { const q = rsPoint(H[l], RC[l], gm.p); objs.push({ z: CY + q.y, m: { x: CX + q.x, y: CY + q.y }, i: gm.p * 97, l, b: gm.b }); }
+  // ---- depth-sorted objects: gems, cars, ghost, warp pipe
+  const objs = [], q = {};
+  for (let l = 0; l < 4; l++) for (let j = 0; j < S.mk[l].length; j++) {
+    const gm = S.mk[l][j]; trackPoint(H[l], gm.p, q);
+    const ob = { z: CY + q.y, m: { x: CX + q.x, y: CY + q.y }, i: gm.p * 97, l, b: gm.b, sc: 1, lift: 0 };
+    if (WP) {
+      const d = Math.hypot(ob.m.x - plx, ob.m.y - ply);
+      if (WP.ph === 'exit') {             // gems fly into your car
+        const k = clamp((WP.u - .06 - d / 1500 * .34) / .3, 0, 1);
+        if (k >= 1) { const key = l * 1000 + j; if (!wf.got || !wf.got.has(key)) { if (wf.got) wf.got.add(key); spawnSparks(plx, ply, 3, '#FFE08A', 160); } continue; }
+        const e = easeInCubic(k); ob.m = { x: ob.m.x + (plx - ob.m.x) * e, y: ob.m.y + (ply - ob.m.y) * e }; ob.lift = 70 * Math.sin(Math.PI * k); ob.sc = 1 - .6 * k; ob.z = ob.m.y;
+      } else {                            // new gems pop in outward from your car
+        const k = clamp((WP.v - .22 - d / 1600) / .2, 0, 1);
+        if (k <= 0) continue;
+        ob.sc = easeOutBack(k); ob.b = -999;
+      }
+    }
+    objs.push(ob);
+  }
   if (CF) {
     const fr = App.ring[CF.idx];
     const wreck = CF.t < CFG.CRASH_FREEZE, ch = wreck ? clamp(CF.t / .35, 0, 1) : 0, spin = wreck && !V.rm ? easeOut(clamp(CF.t / .5, 0, 1)) : 0;
     for (const e of fr.en) { const hit = e.id === App.crash.id; objs.push({ z: e.y, car: 'enemy', x: e.x, y: e.y, a: e.a + (hit ? spin * .9 : 0), type: e.type, glow: wreck && hit ? 0 : .45, char: hit ? ch : 0 }); }
     objs.push({ z: fr.pl.y, car: 'player', x: fr.pl.x, y: fr.pl.y, a: fr.pl.a - spin * .7, glow: wreck ? 0 : .6, char: ch });
   } else {
-    for (const e of S.enemies) {
+    S.enemies.forEach((e, i) => {
       carPos(e, interpP(e, e.id, alpha), tf, pp);
+      let z = 0, flash = 0;
+      if (WP && WP.ph === 'exit') {                        // rivals flash, then poof
+        if (WP.u >= .1) { if (!wf.poofed) { wf.poofed = true; for (const e2 of S.enemies) { const p2 = {}; carPos(e2, e2.p, tf, p2); spawnPuffs(p2.x, p2.y, 7, { sp: V.sp.dust, r: 16, grow: 40, life: .55, speed: 70, a: .8, vz: 30 }); spawnSparks(p2.x, p2.y, 10, '#3DE8FF', 300); } } return; }
+        flash = (Math.floor(WP.u * 30) & 1);
+      } else if (WP) {                                      // rivals drop in from the sky
+        const k = clamp((WP.v - .38 - .1 * i) / .3, 0, 1);
+        if (k <= 0) return;
+        z = 320 * (1 - k * k);
+        if (k >= 1 && wf.landed && !wf.landed[i]) { wf.landed[i] = true; spawnPuffs(pp.x, pp.y, 6, { sp: V.sp.dust, r: 12, grow: 34, life: .5, speed: 60, a: .7 }); V.shake = Math.max(V.shake, 2.2); }
+      }
       const dd = mod1(P.p - e.p), prox = 1 - 2 * Math.min(dd, 1 - dd), same = e.lane === P.lane;
-      if (moving && S.mode !== 'hunter') Sound.growl(e, pp.x, prox * (same ? 1 : .6));
-      drawTrailW(g, V.trails.get(e.id), pp.x, pp.y, V.trailC, 9);
-      if (S.mode !== 'hunter') drawTelegraph(g, S, e, pp);
-      objs.push({ z: pp.y, car: 'enemy', x: pp.x, y: pp.y, a: pp.a, type: e.type, id: e.id, glow: .2 + .6 * prox * prox * (same ? 1 : .6), slow: !!(S.fx && S.fx.slow > S.tick) });
-    }
+      if (moving && !WP && S.mode !== 'hunter') Sound.growl(e, pp.x, prox * (same ? 1 : .6));
+      if (!WP) drawTrailW(g, V.trails.get(e.id), pp.x, pp.y, V.trailC, 9);
+      if (!WP && S.mode !== 'hunter') drawTelegraph(g, S, e, pp);
+      objs.push({ z: pp.y, car: 'enemy', x: pp.x, y: pp.y, a: pp.a, hop: pp.hop, type: e.type, id: e.id, lift: z, flash, glow: WP ? .3 : .2 + .6 * prox * prox * (same ? 1 : .6), slow: !!(S.fx && S.fx.slow > S.tick) });
+    });
     const G = App.ghost;
-    if (G && !G.done) { carPos(G.S.player, G.p0 + (G.S.player.p - G.p0) * alpha, G.S.tick - 1 + alpha, pp); objs.push({ z: pp.y, car: 'player', ghost: true, x: pp.x, y: pp.y, a: pp.a }); }
-    carPos(P, interpP(P, 0, alpha), tf, pp);
-    drawTrailW(g, V.trails.get(0), pp.x, pp.y, P.od ? V.trailF : V.trailW, P.od ? 15 : 11);
-    objs.push({ z: pp.y, car: 'player', x: pp.x, y: pp.y, a: pp.a, od: P.od, glow: P.od ? .9 : .55 });
-    V.lastPl = { x: pp.x, y: pp.y, nx: pp.nx, ny: pp.ny };
+    if (G && !G.done && !WP) { carPos(G.S.player, G.p0 + (G.S.player.p - G.p0) * alpha, G.S.tick - 1 + alpha, pp); objs.push({ z: pp.y, car: 'player', ghost: true, x: pp.x, y: pp.y, a: pp.a }); }
+    if (!WP) drawTrailW(g, V.trails.get(0), plx, ply, P.od ? V.trailF : V.trailW, P.od ? 15 : 11);
+    const pl = { z: ply, car: 'player', x: plx, y: ply, a: pla, hop: plHop, od: P.od && !WP, glow: P.od ? .9 : .55 };
+    if (WP) {                                               // your car rides the warp pipe
+      let ph = 0, cz = 0, cs = 1, clip = false, spin = 0, show = true;
+      if (WP.ph === 'exit') {
+        ph = 30 * easeOutBack(clamp((WP.u - .2) / .18, 0, 1));
+        const hopU = clamp((WP.u - .4) / .1, 0, 1), sk = clamp((WP.u - .5) / .24, 0, 1);
+        cz = ph + 12 * Math.sin(Math.PI * hopU) - 36 * easeInCubic(sk); cs = 1 - .35 * sk; clip = sk > 0; show = sk < 1;
+      } else {
+        const rise = easeOutBack(clamp((WP.v - .12) / .18, 0, 1)), sink = easeInCubic(clamp((WP.v - .62) / .18, 0, 1)), kp = clamp((WP.v - .3) / .32, 0, 1);
+        ph = 30 * rise * (1 - sink);
+        show = WP.v >= .3; spin = V.rm ? 0 : Math.PI * 2 * easeOutCubic(kp);
+        cz = kp < 1 ? ph - 30 * (1 - clamp(kp * 3, 0, 1)) + 52 * Math.sin(Math.PI * kp) : ph;
+        cs = .6 + .4 * easeOutBack(clamp(kp * 2, 0, 1)); clip = kp < .34;
+        if (kp >= 1 && !wf.popped) { wf.popped = true; }
+      }
+      if (V.rm) { ph = 0; cz = 0; cs = 1; clip = false; }
+      if (ph > .5) objs.push({ z: ply - .01, pipe: true, x: plx, y: ply, ph, lipAfter: clip && show });
+      pl.a = pla + spin; pl.lift = cz; pl.scale = cs; pl.clip = clip; pl.glow = .35;
+      if (show) objs.push(pl);
+    } else objs.push(pl);
+    V.lastPl = { x: plx, y: ply, nx: plnx, ny: plny };
   }
   if (CF && CF.u > 0) {       // both paths during the rewind
     for (const which of ['pl', 'en']) {
       g.beginPath(); let first = true;
       for (let i = CF.idx; i <= CF.end; i++) {
-        const r = App.ring[i], q = which === 'pl' ? r.pl : r.en.find(o => o.id === App.crash.id);
-        if (!q) continue;
-        const o = pj(q.x, q.y, 2); if (first) { g.moveTo(o.x, o.y); first = false; } else g.lineTo(o.x, o.y);
+        const r = App.ring[i], rq = which === 'pl' ? r.pl : r.en.find(o => o.id === App.crash.id);
+        if (!rq) continue;
+        const o = pj(rq.x, rq.y, 2); if (first) { g.moveTo(o.x, o.y); first = false; } else g.lineTo(o.x, o.y);
       }
       g.strokeStyle = which === 'pl' ? 'rgba(255,243,230,.75)' : 'rgba(61,232,255,.75)'; g.lineWidth = 4 * s; g.lineCap = 'round'; g.setLineDash([2 * s, 8 * s]); g.stroke(); g.setLineDash([]); g.lineCap = 'butt';
     }
   }
   objs.sort((a, b) => a.z - b.z);
-  const bob = V.rm ? 0 : 1, ms = (Settings.hc ? 30 : 24) * (V.os || 1);
+  const bob = V.rm ? 0 : 1, ms = (Settings.hc ? 30 : 24) * os;
+  let pipeO = null;
   for (const ob of objs) {
     if (ob.m) {       // gems spin and breathe (static under reduced motion)
-      const pin = ob.b > -999 ? easeOutBack(clamp((S.tick - ob.b) / 14, 0, 1)) : 1;    // new gems pop in
+      const pin = (ob.b > -999 ? easeOutBack(clamp((S.tick - ob.b) / 14, 0, 1)) : 1) * ob.sc;
       const ph = ob.i * .37 + ob.l * .21, pulse = (bob ? 1 + .17 * Math.sin(t * 3.2 + ph * 6.283) : 1) * pin;
-      const sh = pj(ob.m.x, ob.m.y, 0), shx = sh.x, shy = sh.y, k0 = sh.k * (V.os || 1) * pulse;
-      g.globalAlpha = .55; g.drawImage(V.sp.shadow, shx - 8 * k0, shy - 8 * k0 * CAM.ca, 16 * k0, 16 * k0 * CAM.ca); g.globalAlpha = 1;
-      const o = pj(ob.m.x, ob.m.y, 15 + bob * 4 * Math.sin(t * 2.4 + ph * 6.283)), sz = ms * o.k * 1.15 * pulse;
+      const sh = pj(ob.m.x, ob.m.y, 0), shx = sh.x, shy = sh.y, k0 = sh.k * os * pulse;
+      g.globalAlpha = .55 / (1 + ob.lift / 30); g.drawImage(V.sp.shadow, shx - 8 * k0, shy - 8 * k0 * CAM.ca, 16 * k0, 16 * k0 * CAM.ca); g.globalAlpha = 1;
+      const o = pj(ob.m.x, ob.m.y, 15 + ob.lift + bob * 4 * Math.sin(t * 2.4 + ph * 6.283)), sz = ms * o.k * 1.15 * pulse;
       const fr = V.sp.gems[bob ? Math.floor(mod1(t * .8 + ph) * V.sp.gems.length) : 5];
-      g.drawImage(fr, o.x - sz / 2, o.y - sz / 2, sz, sz);
+      if (sz > .5) g.drawImage(fr, o.x - sz / 2, o.y - sz / 2, sz, sz);
+    } else if (ob.pipe) {
+      pipeO = drawPipe(g, ob.x, ob.y, ob.ph, hue); pipeO.lip = ob.lipAfter;
     } else if (ob.car === 'player') {
-      drawCar3D(g, ob.x, ob.y, ob.a, 'player', ob.ghost ? { ghost: true, alpha: .5 } : { glow: ob.glow * .6, glowSprite: ob.od ? V.sp.glowG : V.sp.glowW, char: ob.char });
+      if (ob.clip && pipeO) { g.save(); g.beginPath(); g.rect(0, 0, V.W, pipeO.y); g.ellipse(pipeO.x, pipeO.y, pipeO.rx * .86, pipeO.ry * .86, 0, 0, Math.PI * 2); g.clip(); }
+      drawCar3D(g, ob.x, ob.y, ob.a, 'player', ob.ghost ? { ghost: true, alpha: .5 } : { glow: ob.glow * .6, glowSprite: ob.od ? V.sp.glowG : V.sp.glowW, char: ob.char, od: ob.od, hop: ob.hop, z: ob.lift, scale: ob.scale, noFx: !!WP });
+      if (ob.clip && pipeO) { g.restore(); if (pipeO.lip) pipeLip(g, pipeO, hue); }
     } else {
       const sp = ob.id != null ? V.split.get(ob.id) : 0;
       if (sp && sp > t && !V.rm) {       // chromatic split on the passing car only
         g.globalCompositeOperation = 'lighter';
-        drawCar3D(g, ob.x, ob.y, ob.a, 'enemy', { type: ob.type, color: [224, 30, 43], alpha: .55, dx: -4 * V.dpr, ghost: false, glow: 0 });
-        drawCar3D(g, ob.x, ob.y, ob.a, 'enemy', { type: ob.type, color: [61, 107, 255], alpha: .55, dx: 4 * V.dpr, ghost: false, glow: 0 });
+        drawCar3D(g, ob.x, ob.y, ob.a, 'enemy', { type: ob.type, color: [224, 30, 43], alpha: .55, dx: -4 * dpr, glow: 0 });
+        drawCar3D(g, ob.x, ob.y, ob.a, 'enemy', { type: ob.type, color: [61, 107, 255], alpha: .55, dx: 4 * dpr, glow: 0 });
         g.globalCompositeOperation = 'source-over';
       }
-      drawCar3D(g, ob.x, ob.y, ob.a, 'enemy', ob.slow ? { type: ob.type, glow: ob.glow, glowSprite: V.sp.puGlow.slow, color: [120, 150, 255] } : { type: ob.type, glow: ob.glow, glowSprite: V.sp.glowC, char: ob.char });
+      const o2 = ob.flash ? { type: ob.type, color: [240, 252, 255], glow: .8, glowSprite: V.sp.glowW } : ob.slow ? { type: ob.type, glow: ob.glow, glowSprite: V.sp.puGlow.slow, color: [120, 150, 255] } : { type: ob.type, glow: ob.glow, glowSprite: V.sp.glowC, char: ob.char };
+      o2.hop = ob.hop; o2.z = ob.lift;
+      drawCar3D(g, ob.x, ob.y, ob.a, 'enemy', o2);
     }
   }
-  if (!CF) {                  // floating pin over your car ("YOU" at first; P1/P2 in 2-player)
+  if (!CF && steer) {                  // floating pin over your car ("YOU" at first; P1/P2 in 2-player)
     const pins = S.mode === 'hunter'
       ? [[P, 0, 'P' + (S.roles.indexOf('runner') + 1), '#E01E2B'], [S.enemies[0], S.enemies[0].id, 'P' + (S.roles.indexOf('hunter') + 1), '#3DE8FF']]
       : [[P, 0, (S.tick < 4 * HZ || !S.firstChange) ? 'YOU' : '', '#E01E2B']];
     g.textAlign = 'center'; g.textBaseline = 'middle';
     for (const [d, id, label, col] of pins) {
       carPos(d, interpP(d, id, alpha), tf, pp);
-      const o = pj(pp.x, pp.y, 50 * (V.os || 1)), k = o.k * (V.os || 1), ox = o.x, oy = o.y + (V.rm ? 0 : Math.sin(t * 4) * 3 * o.k);
-      g.fillStyle = col; g.strokeStyle = 'rgba(11,11,16,.9)'; g.lineWidth = 1.6 * V.dpr;
+      const o = pj(pp.x, pp.y, 52 * os), k = o.k * os, ox = o.x, oy = o.y + (V.rm ? 0 : Math.sin(t * 4) * 3 * o.k);
+      g.fillStyle = col; g.strokeStyle = 'rgba(11,11,16,.9)'; g.lineWidth = 1.6 * dpr;
       g.beginPath(); g.moveTo(ox, oy + 7 * k); g.lineTo(ox - 7 * k, oy - 4 * k); g.lineTo(ox + 7 * k, oy - 4 * k); g.closePath(); g.fill(); g.stroke();
       if (label) { g.font = `400 ${7 * k}px "Press Start 2P", ui-monospace, monospace`; g.fillStyle = '#FFF3E6'; g.fillText(label, ox, oy - 13 * k); }
     }
   }
-  // particles (3D sparks), marker pops, floating text
+  // puffs (smoke, dust), 3D sparks, marker pops, floating text
   const dtp = V.dtFrame || 0;
+  for (let i = V.puffs.length - 1; i >= 0; i--) {
+    const q2 = V.puffs[i]; q2.t += dtp;
+    if (q2.t >= q2.life) { V.puffs.splice(i, 1); continue; }
+    q2.x += q2.vx * dtp; q2.y += q2.vy * dtp; q2.z += q2.vz * dtp; q2.vx *= .94; q2.vy *= .94;
+    const u = q2.t / q2.life, o = pj(q2.x, q2.y, q2.z), r = (q2.r + q2.grow * easeOut(u)) * o.k;
+    g.globalAlpha = q2.a * (1 - u) * Math.min(1, u * 6); g.drawImage(q2.sp, o.x - r, o.y - r, r * 2, r * 2);
+  }
+  g.globalAlpha = 1;
   g.globalCompositeOperation = 'lighter'; g.lineCap = 'round';
   for (let i = V.parts.length - 1; i >= 0; i--) {
-    const q = V.parts[i]; q.t += dtp;
-    if (q.t >= q.life) { V.parts.splice(i, 1); continue; }
-    const o0 = pj(q.x, q.y, q.z), x0 = o0.x, y0 = o0.y;
-    q.x += q.vx * dtp; q.y += q.vy * dtp; q.z = Math.max(0, q.z + q.vz * dtp); q.vz -= 520 * dtp; q.vx *= .93; q.vy *= .93;
-    const o1 = pj(q.x, q.y, q.z);
-    g.strokeStyle = q.color; g.globalAlpha = 1 - q.t / q.life; g.lineWidth = 2.6 * s;
+    const q2 = V.parts[i]; q2.t += dtp;
+    if (q2.t >= q2.life) { V.parts.splice(i, 1); continue; }
+    const o0 = pj(q2.x, q2.y, q2.z), x0 = o0.x, y0 = o0.y;
+    q2.x += q2.vx * dtp; q2.y += q2.vy * dtp; q2.z = Math.max(0, q2.z + q2.vz * dtp); q2.vz -= 520 * dtp; q2.vx *= .93; q2.vy *= .93;
+    const o1 = pj(q2.x, q2.y, q2.z);
+    g.strokeStyle = q2.color; g.globalAlpha = 1 - q2.t / q2.life; g.lineWidth = 2.6 * s;
     g.beginPath(); g.moveTo(x0, y0); g.lineTo(o1.x + (o1.x - x0) * 2, o1.y + (o1.y - y0) * 2); g.stroke();
   }
   g.globalAlpha = 1; g.lineCap = 'butt';
   for (let i = V.pops.length - 1; i >= 0; i--) {
-    const q = V.pops[i]; q.t += dtp; const u = q.t / .26;
+    const q2 = V.pops[i]; q2.t += dtp; const u = q2.t / .26;
     if (u >= 1) { V.pops.splice(i, 1); continue; }
-    const o = pj(q.x, q.y, 15 + u * 10), sz = ms * o.k * (1 + .6 * u);
+    const o = pj(q2.x, q2.y, 15 + u * 10), sz = ms * o.k * (1 + .6 * u);
     g.globalAlpha = 1 - u; g.drawImage(V.sp.marker, o.x - sz / 2, o.y - sz / 2, sz, sz);
+    if (!V.rm && u < .5) { const ss = sz * 1.3 * (1 - u * 2); g.globalAlpha = .9 * (1 - u * 2); g.drawImage(V.sp.star, o.x - ss / 2, o.y - ss / 2, ss, ss); }
   }
   g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
   g.textAlign = 'center'; g.textBaseline = 'middle';
   for (let i = V.floaters.length - 1; i >= 0; i--) {
-    const q = V.floaters[i]; q.t += dtp;
-    if (q.t > 1) { V.floaters.splice(i, 1); continue; }
-    const o = pj(q.x, q.y, 40 + (V.rm ? 0 : q.t * 40));
+    const q2 = V.floaters[i]; q2.t += dtp;
+    if (q2.t > 1) { V.floaters.splice(i, 1); continue; }
+    const o = pj(q2.x, q2.y, 40 + (V.rm ? 0 : q2.t * 40));
     g.font = `400 ${11 * o.k}px "Press Start 2P", ui-monospace, monospace`;
-    g.globalAlpha = 1 - q.t; g.fillStyle = q.color; g.fillText(q.text, o.x, o.y);
+    g.globalAlpha = 1 - q2.t; g.fillStyle = q2.color; g.fillText(q2.text, o.x, o.y);
   }
   g.globalAlpha = 1;
   if (CF) {
@@ -2040,8 +2604,8 @@ function renderMain(alpha, t) {
       g.beginPath(); pathRS(g, H[sf.lane], sf.g, sf.g - .25, 2, true);
       g.strokeStyle = `rgba(61,232,255,${(.28 * pulse).toFixed(3)})`; g.lineWidth = 26 * s; g.stroke();
       g.strokeStyle = `rgba(230,252,255,${(.9 * pulse).toFixed(3)})`; g.lineWidth = 5 * s; g.stroke();
-      const q = rsPoint(H[sf.lane], RC[sf.lane], sf.g);
-      g.fillStyle = '#E6FCFF'; g.beginPath(); groundCircle(g, CX + q.x, CY + q.y, 9, 0, Math.PI * 2, 2); g.fill();
+      const q3 = trackPoint(H[sf.lane], sf.g);
+      g.fillStyle = '#E6FCFF'; g.beginPath(); groundCircle(g, CX + q3.x, CY + q3.y, 9, 0, Math.PI * 2, 2); g.fill();
       g.lineCap = 'butt';
     }
   }
@@ -2050,22 +2614,59 @@ function renderMain(alpha, t) {
     g.strokeStyle = V.tap.c === 0 ? `rgba(255,243,230,${1 - u})` : `rgba(255,194,71,${1 - u})`; g.lineWidth = 3 * s;
     g.beginPath(); groundCircle(g, V.tap.x, V.tap.y, 16 + u * 18, 0, Math.PI * 2, 1); g.stroke();
   }
-  if (!S.firstChange && (st === 'ready' || st === 'live')) {   // first-run hint over the next gap
-    const hgP = nextOpenGap(S, P).g, q = rsPoint(H[P.lane], RC[P.lane], hgP), gx = CX + q.x, gy = CY + q.y, pu = V.rm ? .5 : .5 + .5 * Math.sin(t * 6);
+  if (!S.firstChange && !WP && (st === 'ready' || st === 'live')) {   // first-run hint over the next gap
+    const hgP = nextOpenGap(S, P).g, hq = trackPoint(H[P.lane], hgP, {}), gx = CX + hq.x, gy = CY + hq.y, pu = V.rm ? .5 : .5 + .5 * Math.sin(t * 6);
     g.strokeStyle = `rgba(255,243,230,${(.55 * (1 - pu)).toFixed(3)})`; g.lineWidth = 3 * s;
     g.beginPath(); groundCircle(g, gx, gy, 30 + 14 * pu, 0, Math.PI * 2, 1); g.stroke();
-    g.font = `400 ${9 * s * (V.os || 1)}px "Press Start 2P", ui-monospace, monospace`; g.fillStyle = '#FFF3E6';
-    const qnx = q.nx, qny = q.ny, qtx = q.tx, qty = q.ty, hg = gapIdx(hgP);
+    g.font = `400 ${9 * s * os}px "Press Start 2P", ui-monospace, monospace`; g.fillStyle = '#FFF3E6';
+    const hg = gapIdx(hgP);
     let o;
-    if (canMove(S, P.lane, -1, hg)) { o = pj(gx - qnx * 56, gy - qny * 56, 4); g.fillText('IN', o.x, o.y); }
-    if (canMove(S, P.lane, 1, hg)) { o = pj(gx + qnx * 58, gy + qny * 58, 4); g.fillText('OUT', o.x, o.y); }
-    q.tx = qtx; q.ty = qty;
-    o = pj(gx + q.tx * 50, gy + q.ty * 50, 22);       // beside the ring, clear of the IN/OUT labels
+    if (canMove(S, P.lane, -1, hg)) { o = pj(gx - hq.nx * 56, gy - hq.ny * 56, 4); g.fillText('IN', o.x, o.y); }
+    if (canMove(S, P.lane, 1, hg)) { o = pj(gx + hq.nx * 58, gy + hq.ny * 58, 4); g.fillText('OUT', o.x, o.y); }
+    o = pj(gx + hq.tx * 50, gy + hq.ty * 50, 22);       // beside the ring, clear of the IN/OUT labels
     drawHand(g, o.x, o.y + 18 * s, (1 + .08 * pu) * s, .95);
   }
-  if (!CF) { drawPUItem(g, S, t); drawPUEffects(g, S, t); }
+  if (!CF && !WP) { drawPUItem(g, S, t); drawPUEffects(g, S, t); }
   drawScore(g, S);
   if (!CF) drawPUHud(g, S);
+  g.restore();
+  if (WP) drawWarpOverlay(g, S, WP, foc, t);
+  bloomPass(g);
+}
+// Screen-space warp layers: flash, the iris (the board survives only inside the circle), texts.
+function drawWarpOverlay(g, S, WP, foc, t) {
+  const w = V.wfx || {}, dpr = V.dpr, hue = V.hue, os = V.os || 1;
+  const R = Math.max(Math.hypot(foc.x, foc.y), Math.hypot(V.W - foc.x, foc.y), Math.hypot(foc.x, V.H - foc.y), Math.hypot(V.W - foc.x, V.H - foc.y)) + 8 * dpr;   // iris starts at the farthest corner
+  let r = -1;
+  if (WP.ph === 'exit') { if (WP.u < .14) { g.save(); g.globalCompositeOperation = 'source-atop'; g.fillStyle = `rgba(255,255,255,${(.4 * (1 - WP.u / .14)).toFixed(3)})`; g.fillRect(0, 0, V.W, V.H); g.restore(); } r = R * (1 - easeInOut(clamp((WP.u - .52) / .38, 0, 1))); }
+  else r = R * easeInOut(clamp(WP.v / .4, 0, 1));
+  if (V.rm) {                                // reduced motion: a plain fade instead of the iris
+    const a = WP.ph === 'exit' ? clamp((WP.u - .5) / .45, 0, 1) : 1 - clamp(WP.v / .3, 0, 1);
+    if (a > 0) { g.save(); g.globalCompositeOperation = 'destination-out'; g.fillStyle = `rgba(0,0,0,${a.toFixed(3)})`; g.fillRect(0, 0, V.W, V.H); g.restore(); }
+  } else if (r < R) {
+    g.save(); g.globalCompositeOperation = 'destination-in'; g.beginPath(); g.arc(foc.x, foc.y, Math.max(0, r), 0, Math.PI * 2); g.fillStyle = '#000'; g.fill(); g.restore();
+    if (r > 1) { g.save(); g.globalCompositeOperation = 'lighter'; g.strokeStyle = neonOf(hue, .9); g.lineWidth = 3 * dpr; g.beginPath(); g.arc(foc.x, foc.y, r, 0, Math.PI * 2); g.stroke(); g.strokeStyle = neonOf(hue, .3); g.lineWidth = 12 * dpr; g.stroke(); g.restore(); }
+  }
+  const size = Math.min(V.W * .07, V.H * .06), above = foc.y - 95 * CAM.sc * os;
+  if (WP.ph === 'exit' && WP.u < .85) {
+    const k = clamp((WP.u - .04) / .22, 0, 1);
+    arcadeText(g, `LEVEL ${Math.max(1, (w.level || S.level) - 1)} CLEAR!`, foc.x, Math.max(size, above), size * .6, '#FFD300', V.rm ? 1 : easeOutBack(k), k * (1 - clamp((WP.u - .7) / .15, 0, 1)));
+  }
+  if (WP.ph === 'enter') {
+    const v = WP.v;
+    if (v > .3 && v < .74) arcadeText(g, 'READY?', foc.x, Math.max(size, above), size * .62, '#FFFFFF', V.rm ? 1 : easeOutBack(clamp((v - .3) / .16, 0, 1)), 1 - clamp((v - .64) / .1, 0, 1));
+    if (v > .76) { const k = clamp((v - .76) / .16, 0, 1); arcadeText(g, 'GO!', foc.x, Math.max(size, above), size * 1.1, '#FFD300', V.rm ? 1 : easeOutBack(k) * (1 + .15 * clamp((v - 1) / .15, 0, 1)), 1 - clamp((v - 1.02) / .13, 0, 1)); }
+  }
+}
+// Bloom: shrink the frame, square it twice so only bright light survives, and add it back blurred.
+function bloomPass(g) {
+  if (V.fxq < 1 || Settings.hc || !V.bloomA) return;
+  const A = V.bloomA, B = V.bloomB, a = V.bloomAG || (V.bloomAG = A.getContext('2d')), b = V.bloomBG || (V.bloomBG = B.getContext('2d'));
+  a.globalCompositeOperation = 'copy'; a.drawImage(V.cv, 0, 0, A.width, A.height);
+  b.globalCompositeOperation = 'copy'; b.drawImage(A, 0, 0);
+  b.globalCompositeOperation = 'multiply'; b.drawImage(A, 0, 0); b.drawImage(A, 0, 0);
+  g.save(); g.setTransform(1, 0, 0, 1, 0, 0); g.globalCompositeOperation = 'lighter';
+  g.globalAlpha = .62; g.drawImage(B, 0, 0, V.W, V.H);
   g.restore();
 }
 // Crash boom: flash, shockwave rings, rising fireball, smoke, tumbling debris and a CRASH! pop.
@@ -2150,7 +2751,7 @@ function drawPUItem(g, S, t) {
   const U = S.pu;
   if (!U) return;
   if ((U.until - S.tick) / HZ < 2 && ((S.tick >> 3) & 1)) return;          // blinks before it vanishes
-  const q = rsPoint(H[U.lane], RC[U.lane], U.p), x = CX + q.x, y = CY + q.y, col = POWERUPS[U.kind].color, s = CAM.sc;
+  const q = trackPoint(H[U.lane], U.p), x = CX + q.x, y = CY + q.y, col = POWERUPS[U.kind].color, s = CAM.sc;
   const pop = easeOutBack(clamp((S.tick - U.born) / 18, 0, 1)), pu = V.rm ? .5 : mod1(t * 1.2);
   g.strokeStyle = col; g.globalAlpha = (1 - pu) * .85; g.lineWidth = 3 * s;
   g.beginPath(); groundCircle(g, x, y, 14 + 32 * pu, 0, Math.PI * 2, .5); g.stroke(); g.globalAlpha = 1;
@@ -2180,7 +2781,7 @@ function drawPUEffects(g, S, t) {
     g.beginPath(); groundCircle(g, L.x, L.y, 30 * os + 80 * u, 0, Math.PI * 2, .5); g.stroke();
   }
   if (live('x2')) {
-    const o = pj(L.x, L.y, 78 * os), k = o.k * os;
+    const o = pj(L.x, L.y, 80 * os), k = o.k * os;
     g.font = '400 ' + (9 * k) + 'px "Press Start 2P", ui-monospace, monospace'; g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillStyle = '#FFD300'; g.fillText('2X', o.x + 20 * k, o.y + 8 * k);   // beside the pin, not on it
   }
@@ -2254,7 +2855,7 @@ const UI = {
   readyText() {
     const m = App.mode;
     let main = 'Tap to start', sub = 'Tap inside your lane to go in, outside to go out · hold for Overdrive';
-    if (m === 'endless') sub = TOUCH ? 'Gets harder the longer you last · tap inside / outside your lane · hold to boost' : 'Gets harder the longer you last · ↓ in · ↑ out · hold Space to boost · or click inside / outside your lane';
+    if (m === 'endless') sub = TOUCH ? 'Every level warps you to a new track · tap inside / outside your lane · hold to boost' : 'Every level warps you to a new track · ↓ in · ↑ out · hold Space to boost · or click inside / outside your lane';
     if (m === 'levels') { const L = LEVELS[App.lvl]; main = `${L.name} — tap to start`; sub = goalDesc(L.goal) + (L.fleet.length ? '' : ' · no crash cars yet, just learn to steer') + (App.S && App.S.gapOpen.some(d => d.some(o => !o)) ? ' · some doors are walled off' : ''); }
     if (m === 'hunter') { main = `Round ${App.hunter.round} of 2 — tap to start`; sub = `${App.hunter.round === 1 ? 'P1' : 'P2'} runs (bottom half · ↑ ↓ Space) — ${App.hunter.round === 1 ? 'P2' : 'P1'} hunts (top half · W S Shift)`; }
     this.el.ready.innerHTML = `${main}<small>${sub}</small>`; this.el.ready.hidden = false;
@@ -2346,20 +2947,18 @@ function hideCards() { UI.el.resultCard.hidden = true; UI.el.pauseCard.hidden = 
 function prepare() {
   Input.reset(); hideCards(); UI.safe(''); UI.coach('');
   App.crash = null; App.ghost = null; App.snaps = []; App.snapK = null; App.ring = [];
-  V.trails.clear(); V.parts.length = 0; V.pops.length = 0; V.floaters.length = 0; V.p0.clear(); V.split.clear();
+  V.trails.clear(); V.parts.length = 0; V.pops.length = 0; V.floaters.length = 0; V.puffs.length = 0; V.p0.clear(); V.split.clear(); V.wfx = null; V.shake = 0;
   Sound.stopRun();
   const m = App.mode, st = fitStretch();
-  V.hue = HUE0;
   if (m === 'levels') {
     App.S = simCreate({ mode: 'campaign', level: App.lvl, seed: randomSeed(), stretch: st });     // a fresh random track every attempt
-    V.hue = App.S.hue;
   } else {
     if (m === 'hunter') {
       if (!App.hunter || App.hunter.done) App.hunter = { round: 1, totals: [0, 0] };
       App.S = simCreate({ mode: 'hunter', diff: 1, seed: randomSeed(), stretch: st, roles: App.hunter.round === 1 ? ['runner', 'hunter'] : ['hunter', 'runner'] });
     } else App.S = simCreate({ mode: 'endless', seed: randomSeed(), stretch: st });
   }
-  App.diff = App.S.diff; setGeometry(App.S.rc, App.S.st); layout(true);
+  V.hue = App.S.hue; App.diff = App.S.diff; setGeometry(App.S.shape, App.S.st); layout(true);
   App.state = 'ready'; UI.playing(false);
   buildStatic();
   UI.modeUI(); UI.readyText();
@@ -2369,8 +2968,8 @@ function startLive() {
   App.state = 'live'; App.acc = 0; App.immuneUntil = performance.now() + 1000;
   App.rec = { mode: 'endless', diff: 0, seed: S.seed, st: S.st, ev: [], end: 0 };
   if (S.mode === 'endless') {           // ghost of your best Endless run
-    const code = Store.get('ghostE', null);
-    if (code) { try { const r = runDecode(code); const GS = simCreate({ mode: 'endless', seed: r.seed, stretch: r.st }); setGeometry(S.rc, S.st); App.ghost = { S: GS, rec: r, i: 0, p0: GS.player.p, done: false }; } catch (e) { App.ghost = null; } }
+    const code = Store.get('ghostE3', null);
+    if (code) { try { const r = runDecode(code); const GS = simCreate({ mode: 'endless', seed: r.seed, stretch: r.st }); setGeometry(S.shape, S.st); App.ghost = { S: GS, rec: r, i: 0, p0: GS.player.p, done: false }; } catch (e) { App.ghost = null; } }
   }
   Sound.gesture(); Sound.keyNow = 0; Sound.startRun(S);
   UI.el.ready.hidden = true; UI.playing(true); coachStart();
@@ -2423,7 +3022,7 @@ function tickMain(tOff) {
     while (G.i < G.rec.ev.length && G.rec.ev[G.i][0] <= G.S.tick) gi.push(decEv(G.rec.ev[G.i++][1]));
     G.p0 = G.S.player.p; simStep(G.S, gi);
     if (G.S.crashed || G.S.tick > G.rec.end) G.done = true;
-    setGeometry(S.rc, S.st);                                   // back to this run's track
+    setGeometry(S.shape, S.st);                                // back to this run's track
   }
   const at = Sound.at(tOff);
   handleEvents(S, at);
@@ -2451,10 +3050,22 @@ function handleEvents(S, at) {
   const now = performance.now() / 1000, P = S.player;
   const plPos = () => { const q = {}; carPos(P, P.p, S.tick, q); return q; };
   Sound.keyNow = S.key;
+  if (S.warp) {                   // warp sound cues, keyed to sim ticks so they stay in sync with the picture
+    const W = S.warp, k = S.tick - W.t0, g = W.go - W.t0, gems = S.mk.reduce((n, a) => n + a.length, 0);
+    if (k >= 6 && k <= 30 && k % 3 === 0 && gems > 0 && W.swap > S.tick) Sound.tally(at, k / 3);
+    if (k === 13) Sound.pipeUp(at);
+    if (k === 30) Sound.pipeDown(at);
+    if (k === 37) Sound.irisClose(at);
+    if (k === W.swap - W.t0 + 1) Sound.cardHit(at);
+    if (k === g + 1) Sound.irisOpen(at);
+    if (k === g + 18) Sound.popOut(at);
+    for (let i = 0; i < S.enemies.length; i++) if (k === g + 41 + Math.round(6 * i)) { Sound.thud(at); buzz(25); }
+    if (k === g + 46) { Sound.goHit(at); buzz([15, 20, 30]); }
+  }
   for (const e of S.ev) { coachEvent(S, e); switch (e.t) {
-    case 'gap': V.pulse = 1; Sound.kick(at); buzz(6); break;
+    case 'gap': V.pulse = 1; Sound.kick(at); buzz(6); if (e.to !== e.from) { const q = plPos(); spawnPuffs(q.x - Math.cos(q.a) * 16, q.y - Math.sin(q.a) * 16, 3, { r: 8, grow: 20, life: .45, a: .4, speed: 26, vz: 14 }); } break;
     case 'marker': {
-      const q = rsPoint(H[e.lane], RC[e.lane], e.p), mx = CX + q.x, my = CY + q.y; V.pops.push({ x: mx, y: my, t: 0 }); spawnSparks(mx, my, 6, '#FFC247', 220);
+      const q = trackPoint(H[e.lane], e.p), mx = CX + q.x, my = CY + q.y; V.pops.push({ x: mx, y: my, t: 0 }); spawnSparks(mx, my, 6, '#FFC247', 220);
       Sound.note(at, e.chain);
       break;
     }
@@ -2467,12 +3078,21 @@ function handleEvents(S, at) {
     case 'refill': V.laneFx[e.lane] = now; break;
     case 'circuit': V.circ = now; Sound.drop(at, S); if (S.mode !== 'campaign') UI.banner('Full circuit · key change'); UI.live('Full circuit. Key change.'); break;
     case 'announce': { const t = stepText(e.step, e.level, e.bpm); UI.banner(t); Sound.announce(at); UI.live(t + '.'); break; }
-    case 'levelup': V.sweep = now; V.hue = S.hue; App.diff = S.diff; buildStatic(); Sound.levelUp(at); if (e.track) { UI.banner(`Level ${e.level} · new track`); UI.live('The track changed. Watch for walled doors.'); } break;
+    case 'levelup': {             // Endless warp begins: the sim is frozen while the maps change
+      const stars = [];
+      for (let i = 0; i < 70; i++) stars.push({ a: Math.random() * Math.PI * 2, r: Math.random(), v: .5 + Math.random() * 1.4, w: .8 + Math.random() * 1.8, c: ['#FFFFFF', '#05D9E8', '#FF2A6D', '#FFD300', '#B967FF'][i % 5] });
+      V.wfx = { level: e.level, step: e.step, bpm: e.bpm, poofed: false, popped: false, got: new Set(), landed: [], stars };
+      App.diff = S.diff; Sound.warpDuck(true); Sound.warpFanfare(at); buzz([20, 30, 40]); UI.el.banner.classList.remove('on');
+      UI.coach(''); UI.live(`Level ${e.level - 1} clear. Warping to a new track.`);
+      break;
+    }
+    case 'warpSwap': V.hue = S.hue; buildStatic(); V.trails.clear(); V.p0.clear(); App.immuneUntil = performance.now() + 1500; UI.live(`Level ${S.level}. ${stepText(V.wfx ? V.wfx.step : {}, S.level, S.bpm)}.`); break;
+    case 'warpEnd': Sound.warpDuck(false); Sound.resync(S); V.wfx = null; break;
     case 'puSpawn': Sound.puSpawn(at); if (!Store.get('puSeen', false)) { Store.set('puSeen', true); UI.coach('A power-up appeared — drive through the glowing orb to grab it', 4.5); } break;
     case 'pu': { const q = plPos(), pw = POWERUPS[e.kind]; Sound.puGet(at, e.kind); UI.banner(pw.name.toUpperCase() + '! · ' + pw.desc); floater(pw.name.toUpperCase(), q.x, q.y, pw.color); spawnSparks(q.x, q.y, 14, pw.color, 300); buzz([20, 20, 20]); UI.live(pw.name + ': ' + pw.desc + '.'); break; }
     case 'puEnd': Sound.puEnd(at); break;
-    case 'shieldHit': { const q = rsPoint(H[e.lane], RC[e.lane], e.p), x = CX + q.x, y = CY + q.y; Sound.shieldHit(at); V.shieldFx = { x, y, t0: now }; V.punch = .6; spawnSparks(x, y, 22, '#7DF9FF', 360); floater('BLOCKED!', x, y, '#7DF9FF'); buzz(60); UI.live('Shield blocked a head-on.'); break; }
-    case 'gemSpawn': { const q = rsPoint(H[e.lane], RC[e.lane], e.p); spawnSparks(CX + q.x, CY + q.y, 4, '#FFE08A', 120); break; }
+    case 'shieldHit': { const q = trackPoint(H[e.lane], e.p), x = CX + q.x, y = CY + q.y; Sound.shieldHit(at); V.shieldFx = { x, y, t0: now }; V.punch = .6; spawnSparks(x, y, 22, '#7DF9FF', 360); floater('BLOCKED!', x, y, '#7DF9FF'); buzz(60); UI.live('Shield blocked a head-on.'); break; }
+    case 'gemSpawn': { const q = trackPoint(H[e.lane], e.p); spawnSparks(CX + q.x, CY + q.y, 4, '#FFE08A', 120); break; }
     case 'won': V.circ = now; Sound.levelUp(at); Sound.drop(at + .1, S); break;
     case 'mult': V.spring.v += 7; break;
   } }
@@ -2536,11 +3156,11 @@ function computeSafeExit() {
           while (ei < evs.length && evs[ei][0] <= T.tick) { const e = decEv(evs[ei++][1]); if (e.k === 'd') inp.push({ k: 'd', c: null, w: e.w }); else if (e.k === 'u' || e.k === 'x') inp.push({ k: 'u', w: e.w }); }
           simStep(T, inp);
         }
-        if (!T.crashed) { setGeometry(S.rc, S.st); return { lane: nl, gi, g }; }
+        if (!T.crashed) { setGeometry(S.shape, S.st); return { lane: nl, gi, g }; }
       }
     }
-  } catch (e) { setGeometry(S.rc, S.st); return null; }
-  setGeometry(S.rc, S.st);
+  } catch (e) { setGeometry(S.shape, S.st); return null; }
+  setGeometry(S.shape, S.st);
   return null;
 }
 function pickTip(S, safe) {
@@ -2557,11 +3177,11 @@ function showResult() {
   const S = App.S;
   App.rec.end = S.tick;
   const best = Store.get('best', {}) || {}, prev = best.endless || 0, isBest = S.score > prev;
-  if (isBest) { best.endless = S.score; Store.set('best', best); Store.set('ghostE', runEncode(App.rec)); }
+  if (isBest) { best.endless = S.score; Store.set('best', best); Store.set('ghostE3', runEncode(App.rec)); }
   showCard({
     eyebrow: `Endless · reached ${DIFFS[S.diff].name}`, title: 'Crash', score: fmt(S.score),
     best: isBest ? 'New best' : `Best ${fmt(prev)}`, newBest: isBest,
-    stats: [['Time', fmtTime(S.tick)], ['Level', S.level], ['Passes', S.passes]],
+    stats: [['Time', fmtTime(S.tick - (S.warpTicks || 0))], ['Level', S.level], ['Passes', S.passes]],
     tip: pickTip(S, App.crash && App.crash.safe),
     onFresh: () => { prepare(); startLive(); },
   });
@@ -2736,12 +3356,22 @@ function frame(now) {
   }
   const t = now / 1000;
   V.dtFrame = delta / 1000;
+  // adaptive quality: if frames run long for a couple of seconds of play, drop the bloom pass
+  // adaptive quality: if play can't hold ~50 fps, drop the bloom pass; if it still can't, render at a lower resolution
+  if (App.state === 'live' && !V.fxDone && now > App.immuneUntil) {
+    V.ft.push(delta);
+    if (V.ft.length >= 150) {
+      const avg = V.ft.reduce((x, y) => x + y, 0) / V.ft.length; V.ft.length = 0;
+      if (avg > 19) { if (V.fxq > 0) V.fxq = 0; else if ((window.devicePixelRatio || 1) > 1.25) { V.dprCap = 1.25; V.fxDone = true; layout(true); App.immuneUntil = now + 1000; } else V.fxDone = true; }
+    }
+  }
   updateFx(delta / 1000, t);
   render(App.state === 'live' ? App.acc / TICK_MS : 1, t);
 }
 function updateFx(dt, t) {
   V.pulse = Math.max(0, V.pulse - dt * 4);
   V.punch = Math.max(0, V.punch - dt / .28);
+  V.shake = Math.max(0, V.shake - dt * 10);
   const sp = V.spring; sp.v += (-140 * sp.x - 13 * sp.v) * dt; sp.x += sp.v * dt;
   if (App.S && App.state === 'live' && V.portrait) {
     const d = driverFor(App.S, 0), c = d.queued != null ? d.queued : d.cmd, E = UI.el, g = Math.round(d.gauge / CFG.OD_MAX * 100) + '%';
