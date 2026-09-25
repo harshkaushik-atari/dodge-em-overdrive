@@ -1704,7 +1704,7 @@ const V = {
   stat: null, statG: null, glow: null, glowG: null, bloomA: null, bloomB: null, bloomC: null, fxq: 1, ft: [],
   sp: {}, mpos: [], laneRib: [], trayPath: null, hue: HUE0,
   pulse: 0, punch: 0, sweep: -9, circ: -9, laneFx: [-9, -9, -9, -9], spring: { x: 0, v: 0 },
-  parts: [], pops: [], floaters: [], puffs: [], trails: new Map(), split: new Map(), tap: null,
+  parts: [], pops: [], floaters: [], puffs: [], skids: [], drift: false, trails: new Map(), split: new Map(), tap: null,
   p0: new Map(), rm: false, frame: 0, pp: {}, portrait: false, wfx: null, shake: 0,
 };
 const easeOut = u => 1 - (1 - u) * (1 - u);
@@ -2045,15 +2045,18 @@ function buildStatic() {
 // Car position on the board at fractional tick tf (lane changes animate over LANE_ANIM_TICKS
 // with a little hop). o: x, y, outward normal, heading a, hop 0–1.
 const _cq = {}, _cq0 = {};
+// In the chase view a lane change is a drift: a longer slide with the nose turned into the new
+// lane and a small counter-steer at the end, on the ground (o.drift = 0–1 while it lasts).
 function carPos(c, p, tf, o) {
-  const q = trackPoint(H[c.lane], p, _cq), u = (tf - c.changeTick) / CFG.LANE_ANIM_TICKS;
-  let x = q.x, y = q.y, nx = q.nx, ny = q.ny, tx = q.tx, ty = q.ty, lat = 0, hop = 0;
+  const drift = !!V.drift, u = (tf - c.changeTick) / (drift ? 15 : CFG.LANE_ANIM_TICKS), q = trackPoint(H[c.lane], p, _cq);
+  let x = q.x, y = q.y, nx = q.nx, ny = q.ny, tx = q.tx, ty = q.ty, lat = 0, hop = 0, dr = 0;
   if (u >= 0 && u < 1 && c.changeFrom !== c.lane) {
-    const r = trackPoint(H[c.changeFrom], p, _cq0), e = easeInOut(u);
+    const r = trackPoint(H[c.changeFrom], p, _cq0), e = drift ? u * u * (3 - 2 * u) : easeInOut(u), sg = Math.sign(c.lane - c.changeFrom);
     x = r.x + (x - r.x) * e; y = r.y + (y - r.y) * e; nx = r.nx + (nx - r.nx) * e; ny = r.ny + (ny - r.ny) * e; tx = r.tx + (tx - r.tx) * e; ty = r.ty + (ty - r.ty) * e;
-    lat = Math.sign(c.lane - c.changeFrom) * Math.sin(Math.PI * u) * .55; hop = Math.sin(Math.PI * u);
+    if (drift) { lat = sg * (Math.sin(Math.PI * Math.pow(u, .7)) * .95 - .3 * Math.sin(Math.PI * clamp((u - .62) / .38, 0, 1))); dr = Math.sin(Math.PI * u); }
+    else { lat = sg * Math.sin(Math.PI * u) * .55; hop = Math.sin(Math.PI * u); }
   }
-  o.x = CX + x; o.y = CY + y; o.nx = nx; o.ny = ny; o.hop = hop;
+  o.x = CX + x; o.y = CY + y; o.nx = nx; o.ny = ny; o.hop = hop; o.drift = dr;
   o.a = Math.atan2(ty * c.sign + ny * lat, tx * c.sign + nx * lat);
   return o;
 }
@@ -2893,7 +2896,7 @@ function drawPUHud(g, S) {
 function render(alpha, t) {
   if (!App.S || !V.W) return;
   if (useChase()) { glRender(alpha, t); renderHUD(alpha, t); }
-  else renderMain(alpha, t);
+  else { V.drift = false; renderMain(alpha, t); }
 }
 
 /* ================================ CHASE HUD ================================ */
@@ -3224,6 +3227,13 @@ function glBuildTrack() {
   gl.bindBuffer(gl.ARRAY_BUFFER, GLR.stat); gl.bufferData(gl.ARRAY_BUFFER, B.a.subarray(0, B.n * 10), gl.STATIC_DRAW); GLR.statN = B.n;
   gl.bindBuffer(gl.ARRAY_BUFFER, GLR.sglow); gl.bufferData(gl.ARRAY_BUFFER, SG.a.subarray(0, SG.n * 66), gl.STATIC_DRAW); GLR.sglowN = SG.n * 6;
   GLR.key = GEO.key + '|' + JSON.stringify(App.S ? App.S.gapOpen : '') + '|' + hue + '|' + (hc ? 1 : 0);
+  // A fixed horizon reference (it helps with motion sickness): a faint glow band and sparse far stars.
+  if (!GLR.sky) GLR.sky = gl.createBuffer();
+  const SK = mkSB(260), hz = hsl3(hue, .8, .5);
+  for (let i = 0; i < 40; i++) { const a = i / 40 * Math.PI * 2; sbAdd(SK, Math.cos(a) * 3400, 40, Math.sin(a) * 3400, 700, 190, hz[0], hz[1], hz[2], .1, false); }
+  let sd = 12345; const rnd = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 170; i++) { const a = rnd() * Math.PI * 2, el = .05 + rnd() * .6, R = 3300, sz = 5 + rnd() * 7; sbAdd(SK, Math.cos(a) * Math.cos(el) * R, Math.sin(el) * R + 60, Math.sin(a) * Math.cos(el) * R, sz, sz, .8, .82, 1, .25 + rnd() * .45, false); }
+  gl.bindBuffer(gl.ARRAY_BUFFER, GLR.sky); gl.bufferData(gl.ARRAY_BUFFER, SK.a.subarray(0, SK.n * 66), gl.STATIC_DRAW); GLR.skyN = SK.n * 6;
 }
 // Axis-aligned-to-(nx, ny) box of half-size s centred at (x, z), from y0 to y1.
 function glBox(B, x, z, s, y0, y1, col, e, nx = 1, ny = 0) {
@@ -3374,7 +3384,7 @@ function glProject(x, y, z, o = {}) {
 // ---- camera rigs ----
 function camChase(px, pz, yaw, od) {
   const tall = V.H > V.W, d = (tall ? 235 : 215) - (od ? 16 : 0), h = tall ? 245 : 158, la = tall ? 215 : 140, cx = Math.cos(yaw), cz = Math.sin(yaw);   // a third-person chase: back and above the car
-  return { e: [px - cx * d, h, pz - cz * d], t: [px + cx * la, 6, pz + cz * la], fov: od ? 66 : 60 };
+  return { e: [px - cx * d, h, pz - cz * d], t: [px + cx * la, 6, pz + cz * la], fov: od ? 63 : 60 };
 }
 function camOrbit(t, R, h, cx = 0, cz = 0, sp = .1) { const a = t * sp; return { e: [cx + Math.cos(a) * R, h, cz + Math.sin(a) * R], t: [cx, 0, cz], fov: 50 }; }
 function camSetRig(name, dur) { if (GLR.rig === name) return; GLR.from = { e: GLR.eye.slice(), t: GLR.tgt.slice(), fov: GLR.fovDeg || 60 }; GLR.rig = name; GLR.blendT0 = GLR.t; GLR.blendD = GLR.inited ? dur : 0; GLR.inited = true; }
@@ -3389,24 +3399,33 @@ function glRender(alpha, t) {
   if (GLR.key !== key) glBuildTrack();
   const st = App.state, P = S.player, tf = S.tick - 1 + alpha, pp = {}, WP = warpPhase(S, alpha), CF = (st === 'crash' || (st === 'result' && App.crash)) ? crashFrame() : null, wf = V.wfx || {};
   const dt = Math.min(.05, V.dtFrame || .016);
-  carPos(P, interpP(P, 0, alpha), tf, pp);
-  const plx = pp.x - CX, plz = pp.y - CY, pla = pp.a, plHop = pp.hop;
-  GLR.yaw = angLerp(GLR.yaw, pla, V.rm ? 1 : 1 - Math.exp(-dt * 7));
+  V.drift = true;
+  const pl = interpP(P, 0, alpha);
+  carPos(P, pl, tf, pp);
+  const plx = pp.x - CX, plz = pp.y - CY, pla = pp.a, plHop = pp.hop, plDrift = pp.drift;
+  // Steady camera: it rides a level that eases toward your lane (a lane change slides the view, it
+  // never swings it) and faces along the track ahead (a chord), so corners turn the view early and
+  // gently instead of snapping with the car.
+  const camL = H[P.lane];
+  GLR.camH = GLR.camH == null || st !== 'live' && !WP ? camL : GLR.camH + (camL - GLR.camH) * (1 - Math.exp(-dt / .4));
+  const cLen = curveOf(GEO, GLR.camH).len, cq = trackPoint(GLR.camH, pl, {}), qa = trackPoint(GLR.camH, pl - 230 / cLen, {}), qb = trackPoint(GLR.camH, pl + 70 / cLen, {});
+  const chordYaw = Math.atan2(qa.y - qb.y, qa.x - qb.x), camX = cq.x, camZ = cq.y;
+  GLR.yaw = angLerp(GLR.yaw, chordYaw, V.rm ? 1 : 1 - Math.exp(-dt * 3.2));
   // pick the camera rig
   const R = 560 + CFG.STRETCH * .6;
   let want;
   if (CF) { const cx = App.crash.cx - CX, cz = App.crash.cy - CY; want = camOrbit(t, 190, 95, cx, cz, .35); want.t = [cx, 8, cz]; camSetRig('crash', .5); }
   else if (WP && WP.ph === 'card') { want = camOrbit(t, R * 1.35, R * .95, 0, 0, .3); camSetRig('orbitMap', 0); }
   else if (WP && WP.ph === 'exit') { const k = easeInOut(clamp((WP.u - .35) / .5, 0, 1)), ch = camChase(plx, plz, GLR.yaw, false); want = { e: [ch.e[0] + (plx - ch.e[0]) * .3 * k, ch.e[1] + 230 * k, ch.e[2] + (plz - ch.e[2]) * .3 * k], t: lerp3(ch.t, [plx, 0, plz], k), fov: 62 }; camSetRig('crane', .2); }
-  else if (WP) { want = camChase(plx, plz, pla, false); GLR.yaw = pla; camSetRig('swoop', 1.05); }
-  else if (st === 'live' || st === 'paused') { want = camChase(plx, plz, GLR.yaw, P.od); camSetRig('chase', GLR.rig === 'attract' ? 1.1 : .35); }
+  else if (WP) { GLR.yaw = chordYaw; want = camChase(camX, camZ, chordYaw, false); camSetRig('swoop', 1.05); }
+  else if (st === 'live' || st === 'paused') { if (GLR.rig === 'attract') GLR.yaw = chordYaw; want = camChase(camX, camZ, GLR.yaw, P.od); camSetRig('chase', GLR.rig === 'attract' ? 1.1 : .35); }
   else { want = camOrbit(t, R, R * .62, 0, 0, .12); camSetRig('attract', .6); }
   let u = GLR.blendD > 0 ? clamp((t - GLR.blendT0) / GLR.blendD, 0, 1) : 1;
   u = easeInOut(u);
   GLR.eye = GLR.from ? lerp3(GLR.from.e, want.e, u) : want.e; GLR.tgt = GLR.from ? lerp3(GLR.from.t, want.t, u) : want.t;
   GLR.fovDeg = GLR.from ? GLR.from.fov + (want.fov - GLR.from.fov) * u : want.fov;       // degrees; blends between rigs
   GLR.fov = GLR.fovDeg * Math.PI / 180;
-  if (V.shake > 0 && !V.rm) { GLR.eye[0] += Math.sin(t * 83) * V.shake * 1.5; GLR.eye[1] += Math.cos(t * 71) * V.shake * 1.5; }
+  if (V.shake > 0 && !V.rm) { GLR.eye[0] += Math.sin(t * 83) * V.shake * .6; GLR.eye[1] += Math.cos(t * 71) * V.shake * .6; }
   if (CF && CF.t < .45 && !V.rm) { const s2 = (1 - CF.t / .45) * 6; GLR.eye[0] += Math.sin(t * 71) * s2; GLR.eye[1] += Math.cos(t * 57) * s2; }
   const asp = V.W / V.H;                                   // tall screens: keep enough width in view
   if (asp < 1) GLR.fov = clamp(2 * Math.atan(Math.tan(GLR.fov / 2) * .78 / asp), GLR.fov, 1.5);
@@ -3470,12 +3489,20 @@ function glRender(alpha, t) {
       if (V.rm) { ph = 0; cz = 0; cs = 1; }
       if (ph > .5) glPipe(B, SB, plx, plz, ph, V.hue);
     }
+    if (showCar && plDrift > .05 && st === 'live' && !WP) {     // drift: tyre smoke and skid marks from the rear wheels
+      const c0 = Math.cos(pla), s0 = Math.sin(pla);
+      for (const sv of [-10, 10]) { const rx = pp.x - c0 * 13 - s0 * sv, rz = pp.y - s0 * 13 + c0 * sv; V.skids.push({ x: rx, y: rz, t: t }); }
+      if (!V.rm && (V.frame++ & 1)) spawnPuffs(pp.x - c0 * 16, pp.y - s0 * 16, 1, { r: 7, grow: 18, life: .5, a: .35 * plDrift, speed: 18, vz: 10 });
+    }
     if (showCar) glCar(B, SB, plx, plz, pla + spin, 'player', { hop: plHop, z: cz, scale: cs, od: P.od && !WP, glow: P.od ? .9 : .45, glowCol: P.od ? [1, .75, .3] : [1, .95, .85] });
     V.lastPl = { x: pp.x, y: pp.y };
     // route, door countdown ring and the exits you can take
     if (steer && st === 'live' || (steer && st === 'ready')) glGuides(A, SB, S, P, alpha, t);
   }
   if (CF && App.crash.safe && App.crash.safeShown) { const sf = App.crash.safe, pu = V.rm ? 1 : .65 + .35 * Math.sin(t * 6); glRibbon(A, H[sf.lane], sf.g, sf.g - .25, 12, 1.2, [.1 * pu, .45 * pu, .55 * pu]); glRibbon(A, H[sf.lane], sf.g, sf.g - .25, 3, 1.3, [.6 * pu, .9 * pu, 1 * pu]); }
+  // skid marks fade out over a second and a half
+  for (let i = V.skids.length - 1; i >= 0; i--) { const k = (t - V.skids[i].t) / 1.5; if (k >= 1 || k < 0) { V.skids.splice(i, 1); continue; } sbAdd(SB.dark, V.skids[i].x - CX, .5, V.skids[i].y - CY, 5.6, 5.6, 0, 0, 0, .45 * (1 - k), true); }
+  if (V.skids.length > 400) V.skids.splice(0, V.skids.length - 400);
   // shield bubble, magnet rings
   if (S.fx && !CF && !WP && V.lastPl) {
     const lx = V.lastPl.x - CX, lz = V.lastPl.y - CY, live = k => S.fx[k] > S.tick && ((S.fx[k] - S.tick) / HZ >= 2 || ((S.tick >> 3) & 1) === 0);
@@ -3525,6 +3552,7 @@ function glRender(alpha, t) {
   // smoke (alpha), then glows (additive): static neon glows + dynamic
   gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA); drawFlat(SB.smoke, false);
   gl.blendFunc(gl.ONE, gl.ONE);
+  if (GLR.skyN) { gl.useProgram(SPP.p); gl.uniformMatrix4fv(SU.uV, false, GLR.V); gl.uniformMatrix4fv(SU.uPr, false, GLR.Pr); gl.uniform1f(SU.uDark, 0); gl.bindBuffer(gl.ARRAY_BUFFER, GLR.sky); sprAttr(); gl.drawArrays(gl.TRIANGLES, 0, GLR.skyN); }   // horizon glow + far stars
   if (GLR.sglowN) { gl.useProgram(SPP.p); gl.uniformMatrix4fv(SU.uV, false, GLR.V); gl.uniformMatrix4fv(SU.uPr, false, GLR.Pr); gl.uniform1f(SU.uDark, 0); gl.bindBuffer(gl.ARRAY_BUFFER, GLR.sglow); sprAttr(); gl.drawArrays(gl.TRIANGLES, 0, GLR.sglowN); }
   drawFlat(SB.add, false);
   gl.disable(gl.DEPTH_TEST); drawFlat(SB.xray, false); gl.enable(gl.DEPTH_TEST);     // rival markers show through walls
@@ -3875,7 +3903,7 @@ function hideCards() { UI.el.resultCard.hidden = true; UI.el.pauseCard.hidden = 
 function prepare() {
   Input.reset(); hideCards(); UI.safe(''); UI.coach('');
   App.crash = null; App.ghost = null; App.snaps = []; App.snapK = null; App.ring = [];
-  V.trails.clear(); V.parts.length = 0; V.pops.length = 0; V.floaters.length = 0; V.puffs.length = 0; V.p0.clear(); V.split.clear(); V.wfx = null; V.shake = 0;
+  V.trails.clear(); V.parts.length = 0; V.pops.length = 0; V.floaters.length = 0; V.puffs.length = 0; V.skids.length = 0; V.p0.clear(); V.split.clear(); V.wfx = null; V.shake = 0;
   Sound.stopRun();
   const m = App.mode, st = fitStretch();
   if (m === 'levels') {
