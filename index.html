@@ -248,6 +248,7 @@ kbd{font:600 11px var(--fd);color:var(--pl);border:1px solid var(--edge);border-
     </div>
     <div class="pop" id="setPanel" role="group" aria-label="Settings" hidden>
       <button class="tog" type="button" id="tCam" aria-pressed="true">Chase camera (C)<i aria-hidden="true"></i></button>
+      <button class="tog" type="button" id="tCom" aria-pressed="false">Comfort camera<i aria-hidden="true"></i></button>
       <button class="tog" type="button" id="tMap" aria-pressed="false">Minimap<i aria-hidden="true"></i></button>
       <button class="tog" type="button" id="tRM" aria-pressed="false">Reduced motion<i aria-hidden="true"></i></button>
       <button class="tog" type="button" id="tHC" aria-pressed="false">High contrast<i aria-hidden="true"></i></button>
@@ -1639,6 +1640,11 @@ const Sound = {
   announce(t) { if (!this.on) return; this.osc('sine', 1320, t, .12, this.sfx, .07); this.osc('sine', 1760, t + .1, .16, this.sfx, .07); },
   clearChime(t) { if (!this.on) return; [7, 12, 19].forEach((m, i) => this.osc('triangle', mtof(81 + m + (this.keyNow || 0)), t + i * .045, .1, this.sfx, .06)); },
   mission(t) { if (!this.on) return; const k = this.keyNow || 0; [0, 7, 12, 16, 19, 24].forEach((m, i) => this.osc('square', mtof(76 + m + k), t + i * .05, .12, this.sfx, .05)); this.osc('triangle', mtof(52 + k), t, .4, this.sfx, .12); },
+  screech(t, d) {                // tyres: a squealing band of noise with a falling whine
+    if (!this.on) return;
+    const n = this.nz(t, d, this.sfx, 'bandpass', 2700, 7, .13, .03); n.f.frequency.linearRampToValueAtTime(1900, t + d);
+    const o = this.osc('sawtooth', 900, t, d, this.sfx, .022, .03); o.frequency.linearRampToValueAtTime(640, t + d);
+  },
   warn(t) { if (!this.on) return; this.osc('square', 1560, t, .05, this.sfx, .05); this.osc('square', 1560, t + .09, .05, this.sfx, .05); },
   // ---- level-up warp
   warpDuck(on) {                 // music drops under the warp and comes back for GO
@@ -1704,7 +1710,7 @@ const V = {
   stat: null, statG: null, glow: null, glowG: null, bloomA: null, bloomB: null, bloomC: null, fxq: 1, ft: [],
   sp: {}, mpos: [], laneRib: [], trayPath: null, hue: HUE0,
   pulse: 0, punch: 0, sweep: -9, circ: -9, laneFx: [-9, -9, -9, -9], spring: { x: 0, v: 0 },
-  parts: [], pops: [], floaters: [], puffs: [], skids: [], drift: false, trails: new Map(), split: new Map(), tap: null,
+  parts: [], pops: [], floaters: [], puffs: [], skids: [], skidA: {}, screech: false, drift: false, trails: new Map(), split: new Map(), tap: null,
   p0: new Map(), rm: false, frame: 0, pp: {}, portrait: false, wfx: null, shake: 0,
 };
 const easeOut = u => 1 - (1 - u) * (1 - u);
@@ -2045,19 +2051,44 @@ function buildStatic() {
 // Car position on the board at fractional tick tf (lane changes animate over LANE_ANIM_TICKS
 // with a little hop). o: x, y, outward normal, heading a, hop 0–1.
 const _cq = {}, _cq0 = {};
-// In the chase view a lane change is a drift: a longer slide with the nose turned into the new
-// lane and a small counter-steer at the end, on the ground (o.drift = 0–1 while it lasts).
+// In the chase view a lane change is a drift centred on the door: the car pivots in just before
+// it (a change that is already locked in is known ahead of time), slides through the gap and
+// catches the slide after it. o.drift = 0–1 intensity, o.roll = body lean, o.steer = front-wheel
+// counter-steer (both radians, relative to the body).
+const DRIFT_T = 12;                                    // half-length of a drift, in ticks
+function pendingLane(c) {
+  const S = App.S; if (!S) return null;
+  const g = gapIdx(nextGapP(c)), m = c.dec ? c.dec[0] : c.cmd;
+  if (!m || c.lane + m < 0 || c.lane + m > 3 || !canMove(S, c.lane, m, g)) return null;
+  return c.lane + m;
+}
 function carPos(c, p, tf, o) {
-  const drift = !!V.drift, u = (tf - c.changeTick) / (drift ? 15 : CFG.LANE_ANIM_TICKS), q = trackPoint(H[c.lane], p, _cq);
-  let x = q.x, y = q.y, nx = q.nx, ny = q.ny, tx = q.tx, ty = q.ty, lat = 0, hop = 0, dr = 0;
-  if (u >= 0 && u < 1 && c.changeFrom !== c.lane) {
-    const r = trackPoint(H[c.changeFrom], p, _cq0), e = drift ? u * u * (3 - 2 * u) : easeInOut(u), sg = Math.sign(c.lane - c.changeFrom);
-    x = r.x + (x - r.x) * e; y = r.y + (y - r.y) * e; nx = r.nx + (nx - r.nx) * e; ny = r.ny + (ny - r.ny) * e; tx = r.tx + (tx - r.tx) * e; ty = r.ty + (ty - r.ty) * e;
-    if (drift) { lat = sg * (Math.sin(Math.PI * Math.pow(u, .7)) * .95 - .3 * Math.sin(Math.PI * clamp((u - .62) / .38, 0, 1))); dr = Math.sin(Math.PI * u); }
-    else { lat = sg * Math.sin(Math.PI * u) * .55; hop = Math.sin(Math.PI * u); }
+  const drift = !!V.drift, q = trackPoint(H[c.lane], p, _cq);
+  let x = q.x, y = q.y, nx = q.nx, ny = q.ny, tx = q.tx, ty = q.ty, lat = 0, hop = 0, dr = 0, beta = 0, roll = 0;
+  let from = c.changeFrom, to = c.lane, tau = tf - c.changeTick;
+  if (drift) {
+    if (!(from !== to && tau >= 0 && tau < DRIFT_T)) {
+      from = to = c.lane; const pl = pendingLane(c);
+      if (pl !== null) { const S = App.S, g0 = c.sign < 0 ? Math.floor(p * 4) / 4 : Math.floor(p * 4) / 4 + .25, ticks = Math.abs(p - g0) / (lpsOf(S, c) * DT * S.ts); if (ticks < DRIFT_T) { to = pl; tau = -ticks; } }
+    }
+    if (from !== to) {
+      const u = clamp((tau + DRIFT_T) / (2 * DRIFT_T), 0, 1), e = u * u * (3 - 2 * u), sg = Math.sign(to - from);
+      const a = trackPoint(H[from], p, _cq0), b = trackPoint(H[to], p, _cq);
+      x = a.x + (b.x - a.x) * e; y = a.y + (b.y - a.y) * e; nx = a.nx + (b.nx - a.nx) * e; ny = a.ny + (b.ny - a.ny) * e; tx = a.tx + (b.tx - a.tx) * e; ty = a.ty + (b.ty - a.ty) * e;
+      const dir = sg * -c.sign;                          // + = nose toward the car's left
+      beta = dir * (.62 * Math.sin(Math.PI * clamp(u / .78, 0, 1)) - .19 * Math.sin(Math.PI * clamp((u - .62) / .38, 0, 1)));
+      dr = Math.sin(Math.PI * u); roll = dir * .15 * Math.sin(Math.PI * clamp(u / .85, 0, 1));
+    }
+  } else {
+    const u = tau / CFG.LANE_ANIM_TICKS;
+    if (u >= 0 && u < 1 && from !== to) {
+      const r = trackPoint(H[from], p, _cq0), e = easeInOut(u);
+      x = r.x + (x - r.x) * e; y = r.y + (y - r.y) * e; nx = r.nx + (nx - r.nx) * e; ny = r.ny + (ny - r.ny) * e; tx = r.tx + (tx - r.tx) * e; ty = r.ty + (ty - r.ty) * e;
+      lat = Math.sign(to - from) * Math.sin(Math.PI * u) * .55; hop = Math.sin(Math.PI * u);
+    }
   }
-  o.x = CX + x; o.y = CY + y; o.nx = nx; o.ny = ny; o.hop = hop; o.drift = dr;
-  o.a = Math.atan2(ty * c.sign + ny * lat, tx * c.sign + nx * lat);
+  o.x = CX + x; o.y = CY + y; o.nx = nx; o.ny = ny; o.hop = hop; o.drift = dr; o.roll = roll; o.steer = -beta;
+  o.a = Math.atan2(ty * c.sign + ny * lat, tx * c.sign + nx * lat) + beta;
   return o;
 }
 // Car models: hull, glass cabin, four wheels and trim, all extruded from footprints (back faces
@@ -2964,7 +2995,7 @@ function renderHUD(alpha, t) {
   const u = Math.min(W, Hh) / 100, pad = 12 * dpr, big = Math.max(14 * dpr, Math.min(W * .05, 30 * dpr));
   if (WP && WP.ph === 'card') { drawWarpCard(g, S, WP, t, true); return; }
   // speed lines while boosting
-  if (P.od && st === 'live' && !WP && !V.rm) {
+  if (P.od && st === 'live' && !WP && !V.rm && !Settings.comfort) {
     g.save(); g.globalCompositeOperation = 'lighter'; g.strokeStyle = 'rgba(255,220,140,.22)'; g.lineWidth = 2 * dpr; g.lineCap = 'round';
     const cx = W / 2, cy = Hh * .42, R = Math.hypot(W, Hh) / 2;
     for (let i = 0; i < 26; i++) { const a = i * 2.39996 + t * .3, k = mod1(i * .618 + t * 2.2), r0 = R * (.45 + .5 * k), r1 = r0 + R * .12; g.globalAlpha = k * .8; g.beginPath(); g.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0); g.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1); g.stroke(); }
@@ -3086,6 +3117,8 @@ const SVS = `attribute vec3 aP;attribute vec2 aQ;attribute vec2 aS;attribute vec
 void main(){vec3 w=aP+aF*vec3(aQ.x*aS.x,0.,aQ.y*aS.y);vec4 v=uV*vec4(w,1.);v.xy+=(1.-aF)*aQ*aS;vQ=aQ;vC=aC;gl_Position=uPr*v;}`;
 const SFS = `precision mediump float;varying vec2 vQ;varying vec4 vC;uniform float uDark;
 void main(){float r=dot(vQ,vQ);float a=max(0.,1.-r);a*=a;if(uDark>.5){gl_FragColor=vec4(0.,0.,0.,a*vC.a);}else{gl_FragColor=vec4(vC.rgb*a*vC.a,a*vC.a);}}`;
+const DVS = `attribute vec3 aP;attribute vec2 aD;uniform mat4 uVP;varying vec2 vD;void main(){vD=aD;gl_Position=uVP*vec4(aP,1.);}`;
+const DFS = `precision mediump float;varying vec2 vD;void main(){float a=vD.x*(1.-pow(abs(vD.y),3.));gl_FragColor=vec4(0.,0.,0.,a);}`;
 const hsl3 = (h, s, l) => { h = ((h % 360) + 360) % 360 / 360; const q = l < .5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q, f = t => { t = mod1(t); return t < 1 / 6 ? p + (q - p) * 6 * t : t < .5 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p; }; return [f(h + 1 / 3), f(h), f(h - 1 / 3)]; };
 const c255 = a => [a[0] / 255, a[1] / 255, a[2] / 255];
 
@@ -3100,9 +3133,10 @@ function glInit() {
   try {
     GLR.P = prog(MVS, MFS, ['aP', 'aN', 'aC']);
     GLR.SP = prog(SVS, SFS, ['aP', 'aQ', 'aS', 'aC', 'aF']);
+    GLR.DP = prog(DVS, DFS, ['aP', 'aD']);
   } catch (e) { return false; }
   GLR.gl = gl; GLR.cv = cv;
-  GLR.stat = gl.createBuffer(); GLR.sglow = gl.createBuffer(); GLR.dyn = gl.createBuffer(); GLR.spr = gl.createBuffer(); GLR.dynA = gl.createBuffer();
+  GLR.dec = gl.createBuffer(); GLR.stat = gl.createBuffer(); GLR.sglow = gl.createBuffer(); GLR.dyn = gl.createBuffer(); GLR.spr = gl.createBuffer(); GLR.dynA = gl.createBuffer();
   GLR.mb = mkMB(12000); GLR.ab = mkMB(4000); GLR.sb = mkSB(3000);
   cv.addEventListener('webglcontextlost', e => { e.preventDefault(); GLR.ok = false; if (App.S) layout(true); }, false);
   GLR.ok = true;
@@ -3263,34 +3297,54 @@ function skinCols(t) {
   return { body: c255(sk.body), side: c255(sk.side), stripe: c255(sk.stripe), gloss: sk.gloss || 0 };
 }
 // One car into the dynamic buffers (B opaque, A additive, SB sprites).
+// Extruded footprint through a local→world function W(u, v, h) (u forward, v left, h up).
+function glPrismW(B, foot, Wf, h0, h1, top, side, e, sideE) {
+  const n = foot.length, P0 = [], P1 = [];
+  let cx = 0, cz = 0;
+  for (let i = 0; i < n; i++) { P0.push(Wf(foot[i][0], foot[i][1], h0)); P1.push(Wf(foot[i][0], foot[i][1], h1)); cx += P0[i][0]; cz += P0[i][2]; }
+  cx /= n; cz /= n;
+  if (side) for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n, a = P0[i], b = P0[j]; let nx = b[2] - a[2], nz = -(b[0] - a[0]); const L = Math.hypot(nx, nz) || 1; nx /= L; nz /= L;
+    if (nx * ((a[0] + b[0]) / 2 - cx) + nz * ((a[2] + b[2]) / 2 - cz) < 0) { nx = -nx; nz = -nz; }
+    mbQuad(B, P1[i], P1[j], P0[j], P0[i], [nx, 0, nz], side, side.map(v => v * .6), sideE || 0);
+  }
+  if (top) for (let i = 1; i + 1 < n; i++) mbTri(B, P1[0], P1[i], P1[i + 1], [0, 1, 0], top, e || 0);
+}
 function glCar(B, SB, x, z, ang, kind, o) {
   const M = CAR_M[kind === 'player' ? 'player' : 'enemy'], c = Math.cos(ang), s = Math.sin(ang), k = (o.scale || 1) * (kind === 'player' ? 1.12 : 1.18), lift = (o.z || 0) + (o.hop || 0) * 7, cm = 1 - .72 * (o.char || 0);
   let body, side, stripe;
   if (kind === 'player') { const sk = skinCols(GLR.t); body = sk.body; side = sk.side; stripe = sk.stripe; } else { body = c255(M.top); side = c255(M.side); stripe = null; }
   if (o.color) { body = o.color; side = o.color.map(v => v * .7); }
   body = body.map(v => v * cm); side = side.map(v => v * cm);
-  const Y = h => h * k + lift, at = (u, v) => [x + (u * c - v * s) * k, z + (u * s + v * c) * k];
+  const roll = o.roll || 0, cr = Math.cos(roll), sr = Math.sin(roll);
+  // body frame (leans with roll about the car's long axis) and a flat frame for things on the ground
+  const Wb = (u, v, h) => { const vv = v * k, hh = h * k, v2 = vv * cr - hh * sr, h2 = vv * sr + hh * cr; return [x + u * k * c - v2 * s, lift + h2, z + u * k * s + v2 * c]; };
+  const at = (u, v) => [x + (u * c - v * s) * k, z + (u * s + v * c) * k];
   // shadow and ground glow
   const fall = 1 / (1 + lift / 40);
   sbAdd(SB.dark, x + SHADOW.x * (8 + lift), .6, z + SHADOW.y * (8 + lift), 30 * k, 22 * k, 0, 0, 0, .75 * fall, true);
   if (o.glow > 0) { const g = o.glowCol || [1, .95, .85]; sbAdd(SB.add, x, .7, z, 48 * k, 48 * k, g[0], g[1], g[2], o.glow * fall * .7, true); }
-  for (const w of M.wheels) { const p = at(w[0], w[1]); glPrism(B, WHEEL, p[0], p[1], c, s, k, Y(0), Y(6), [.2, .2, .26], [.08, .08, .1], 0); }
-  glPrism(B, M.hull, x, z, c, s, k, Y(M.hz[0]), Y(M.hz[1]), body, side, kind === 'player' ? 0 : .45, kind === 'player' ? 0 : .32);   // rivals glow so they read in shade and fog
+  // wheels stay on the ground; the front pair turns against the slide (counter-steer)
+  for (const w of M.wheels) {
+    const p = at(w[0], w[1]), wa = ang + (w[0] > 0 ? (o.steer || 0) : 0), wc = Math.cos(wa), ws = Math.sin(wa);
+    glPrismW(B, WHEEL, (u, v, h) => [p[0] + (u * wc - v * ws) * k, lift + h * k, p[1] + (u * ws + v * wc) * k], 0, 6, [.2, .2, .26], [.08, .08, .1], 0);
+  }
+  glPrismW(B, M.hull, Wb, M.hz[0], M.hz[1], body, side, kind === 'player' ? 0 : .45, kind === 'player' ? 0 : .32);   // rivals glow so they read in shade and fog
   const glass = (o.color ? o.color.map(v => v * .35) : c255(M.glass)).map(v => v * cm);
-  glPrism(B, M.cab, x, z, c, s, k, Y(M.cz[0]), Y(M.cz[1]), glass.map(v => v * 1.4), glass.map(v => v * 1.8), 0);
-  const quadTop = (pts, h, col, e) => { const P = pts.map(([u, v]) => { const p = at(u, v); return [p[0], Y(h), p[1]]; }); mbQuad(B, P[0], P[1], P[2], P[3], [0, 1, 0], col, col, e); };
+  glPrismW(B, M.cab, Wb, M.cz[0], M.cz[1], glass.map(v => v * 1.4), glass.map(v => v * 1.8), 0);
+  const quadTop = (pts, h, col, e) => { const P = pts.map(([u, v]) => Wb(u, v, h)); mbQuad(B, P[0], P[1], P[2], P[3], [0, 1, 0], col, col, e); };
   if (!o.char) { const f = M.cab[0][0]; quadTop([[f - .5, -4.8], [f - .5, 4.8], [f - 4.5, 5.6], [f - 4.5, -5.6]], M.cz[1] + .1, [.55, .62, .78], .15); }
   if (kind === 'player' && !o.color) {
     quadTop([[-19, -2.2], [18.3, -2.2], [18.3, 2.2], [-19, 2.2]], M.hz[1] + .1, stripe.map(v => v * cm), 0);
     quadTop([[-10.5, -1.8], [6.5, -1.8], [6.5, 1.8], [-10.5, 1.8]], M.cz[1] + .12, stripe.map(v => v * cm), 0);
-    glPrism(B, CAR_PARTS.player.spoiler, x, z, c, s, k, Y(12.2), Y(14), stripe.map(v => v * cm * .9), stripe.map(v => v * cm * .6), 0);
+    glPrismW(B, CAR_PARTS.player.spoiler, Wb, 12.2, 14, stripe.map(v => v * cm * .9), stripe.map(v => v * cm * .6), 0);
   }
   if (kind !== 'player' && !o.color) {                 // hood chevrons mark the car type
     const ch = [.03, .12, .16], chev = cu => { quadTop([[cu - 5, -5.6], [cu, -.8], [cu, .8], [cu - 5, 5.6]], M.hz[1] + .1, ch, 0); };
     const t = o.type; if (t === 'chaser') chev(14); else if (t === 'interceptor') { chev(10.5); chev(16); } else if (t === 'splitter') { chev(14); chev(8); } else if (t === 'pacer') { chev(9); chev(13); chev(17); } else chev(12);
   }
   if (!o.char && !o.color) {
-    const hu = M.hull[0][0] - .5, L = (u, v, h) => { const p = at(u, v); return [p[0], Y(h), p[1]]; };
+    const hu = M.hull[0][0] - .5, L = Wb;
     for (const sv of [-5, 5]) { const p = L(hu, sv, 5.5); sbAdd(SB.add, p[0], p[1], p[2], 7 * k, 7 * k, 1, .97, .9, .95, false); }
     const beam = kind === 'player' ? [1, .95, .8] : [.5, .9, 1];     // headlight pools on the road ahead
     { const p = at(hu + 40, 0); sbAdd(SB.add, p[0], .7, p[1], 26 * k, 34 * k, beam[0], beam[1], beam[2], kind === 'player' ? .32 : .42, true); }
@@ -3298,13 +3352,43 @@ function glCar(B, SB, x, z, ang, kind, o) {
     if (kind === 'player') for (const sv of [-6.5, 6.5]) { const p = L(-19, sv, 5.5); sbAdd(SB.add, p[0], p[1], p[2], 6 * k, 6 * k, 1, .2, .25, .9, false); }
     else {
       const on = (Math.floor(performance.now() / 200) & 1) === 0;
-      glPrism(B, [[-2.5, -5.5], [-5.5, -5.5], [-5.5, -.4], [-2.5, -.4]], x, z, c, s, k, Y(M.cz[1]), Y(M.cz[1] + 1.8), on ? [1, .28, .34] : [.35, .1, .12], [.5, .1, .12], on ? 1 : 0);
-      glPrism(B, [[-2.5, .4], [-5.5, .4], [-5.5, 5.5], [-2.5, 5.5]], x, z, c, s, k, Y(M.cz[1]), Y(M.cz[1] + 1.8), on ? [.1, .16, .42] : [.36, .48, 1], [.12, .16, .5], on ? 0 : 1);
+      glPrismW(B, [[-2.5, -5.5], [-5.5, -5.5], [-5.5, -.4], [-2.5, -.4]], Wb, M.cz[1], M.cz[1] + 1.8, on ? [1, .28, .34] : [.35, .1, .12], [.5, .1, .12], on ? 1 : 0);
+      glPrismW(B, [[-2.5, .4], [-5.5, .4], [-5.5, 5.5], [-2.5, 5.5]], Wb, M.cz[1], M.cz[1] + 1.8, on ? [.1, .16, .42] : [.36, .48, 1], [.12, .16, .5], on ? 0 : 1);
       const p1 = L(-4, -3.4, 16), p2 = L(-4, 3.4, 16);
       sbAdd(SB.add, p1[0], p1[1], p1[2], 10, 10, 1, .2, .3, on ? .9 : .15, false); sbAdd(SB.add, p2[0], p2[1], p2[2], 10, 10, .3, .45, 1, on ? .15 : .9, false);
     }
     if (o.od) { const p = L(-22, 0, 4), fl = .8 + .4 * Math.random(); sbAdd(SB.add, p[0], p[1], p[2], 10 * fl * k, 10 * fl * k, 1, .6, .2, .9, false); }
   }
+}
+// Drift effects for one car: rubber strips from both rear wheels (continuous, fading), billowing
+// tyre smoke, and a screech when your car starts a slide.
+function driftFx(key, pp, isPlayer, t) {
+  const k = isPlayer ? 1.12 : 1.18, c0 = Math.cos(pp.a), s0 = Math.sin(pp.a), on = pp.drift > .06;
+  for (const [wi, sv] of [[0, -10.5], [1, 10.5]]) {
+    const id = key + ':' + wi, rx = pp.x + (-11.5 * c0 - sv * s0) * k, rz = pp.y + (-11.5 * s0 + sv * c0) * k;
+    let L = V.skidA[id];
+    if (!on) { if (L) delete V.skidA[id]; continue; }
+    if (!L) { L = V.skidA[id] = { pts: [] }; V.skids.push(L); }
+    const last = L.pts[L.pts.length - 1];
+    if (!last || Math.hypot(rx - last.x, rz - last.y) > 3.5) L.pts.push({ x: rx, y: rz, t, a: Math.min(1, pp.drift * 1.6) });
+    if (!V.rm && (isPlayer || (V.frame & 1))) spawnPuffs(rx, rz, 1, { sp: V.sp.dust, r: 7, grow: 44, life: 1, a: .42 * pp.drift, speed: 14, vz: 24, dx: -c0 * 4, dy: -s0 * 4 });
+  }
+  if (isPlayer) { if (on && !V.screech) { V.screech = true; Sound.screech(Sound.at(0), .42); } else if (!on) V.screech = false; }
+}
+function glSkids(t) {                                 // strips → decal triangles (x y z alpha across)
+  const D = GLR.db || (GLR.db = { a: new Float32Array(30000), n: 0 }); D.n = 0;
+  const put = (x, z, a, v) => { if ((D.n + 1) * 5 > D.a.length) { const na = new Float32Array(D.a.length * 2); na.set(D.a); D.a = na; } const o = D.n * 5; D.a[o] = x; D.a[o + 1] = .47; D.a[o + 2] = z; D.a[o + 3] = a; D.a[o + 4] = v; D.n++; };
+  for (let si = V.skids.length - 1; si >= 0; si--) {
+    const L = V.skids[si], P = L.pts;
+    if (!P.length || t - P[P.length - 1].t > 5) { V.skids.splice(si, 1); continue; }
+    for (let i = 1; i < P.length; i++) {
+      const a = P[i - 1], b = P[i], dx = b.x - a.x, dz = b.y - a.y, len = Math.hypot(dx, dz) || 1, px = -dz / len * 3.4, pz = dx / len * 3.4;
+      const fa = .9 * a.a * clamp(1 - (t - a.t) / 5, 0, 1), fb = .9 * b.a * clamp(1 - (t - b.t) / 5, 0, 1);
+      const A0 = [a.x - CX + px, a.y - CY + pz], A1 = [a.x - CX - px, a.y - CY - pz], B0 = [b.x - CX + px, b.y - CY + pz], B1 = [b.x - CX - px, b.y - CY - pz];
+      put(A0[0], A0[1], fa, -1); put(B0[0], B0[1], fb, -1); put(B1[0], B1[1], fb, 1); put(A0[0], A0[1], fa, -1); put(B1[0], B1[1], fb, 1); put(A1[0], A1[1], fa, 1);
+    }
+  }
+  return D;
 }
 // Warp pipe: a neon cylinder with a lip and a dark mouth that hides a car sinking inside.
 function glPipe(B, SB, x, z, ph, hue) {
@@ -3383,8 +3467,9 @@ function glProject(x, y, z, o = {}) {
 
 // ---- camera rigs ----
 function camChase(px, pz, yaw, od) {
-  const tall = V.H > V.W, d = (tall ? 235 : 215) - (od ? 16 : 0), h = tall ? 245 : 158, la = tall ? 215 : 140, cx = Math.cos(yaw), cz = Math.sin(yaw);   // a third-person chase: back and above the car
-  return { e: [px - cx * d, h, pz - cz * d], t: [px + cx * la, 6, pz + cz * la], fov: od ? 63 : 60 };
+  const tall = V.H > V.W, cf = !!Settings.comfort;
+  const d = (cf ? (tall ? 250 : 230) : tall ? 235 : 215) - (od && !cf ? 16 : 0), h = cf ? (tall ? 470 : 380) : tall ? 245 : 158, la = cf ? (tall ? 160 : 110) : tall ? 215 : 140, cx = Math.cos(yaw), cz = Math.sin(yaw);   // a third-person chase: back and above the car
+  return { e: [px - cx * d, h, pz - cz * d], t: [px + cx * la, 6, pz + cz * la], fov: od && !cf ? 63 : 60 };
 }
 function camOrbit(t, R, h, cx = 0, cz = 0, sp = .1) { const a = t * sp; return { e: [cx + Math.cos(a) * R, h, cz + Math.sin(a) * R], t: [cx, 0, cz], fov: 50 }; }
 function camSetRig(name, dur) { if (GLR.rig === name) return; GLR.from = { e: GLR.eye.slice(), t: GLR.tgt.slice(), fov: GLR.fovDeg || 60 }; GLR.rig = name; GLR.blendT0 = GLR.t; GLR.blendD = GLR.inited ? dur : 0; GLR.inited = true; }
@@ -3408,9 +3493,9 @@ function glRender(alpha, t) {
   // gently instead of snapping with the car.
   const camL = H[P.lane];
   GLR.camH = GLR.camH == null || st !== 'live' && !WP ? camL : GLR.camH + (camL - GLR.camH) * (1 - Math.exp(-dt / .4));
-  const cLen = curveOf(GEO, GLR.camH).len, cq = trackPoint(GLR.camH, pl, {}), qa = trackPoint(GLR.camH, pl - 230 / cLen, {}), qb = trackPoint(GLR.camH, pl + 70 / cLen, {});
+  const cLen = curveOf(GEO, GLR.camH).len, cq = trackPoint(GLR.camH, pl, {}), qa = trackPoint(GLR.camH, pl - (Settings.comfort ? 420 : 230) / cLen, {}), qb = trackPoint(GLR.camH, pl + (Settings.comfort ? 160 : 70) / cLen, {});
   const chordYaw = Math.atan2(qa.y - qb.y, qa.x - qb.x), camX = cq.x, camZ = cq.y;
-  GLR.yaw = angLerp(GLR.yaw, chordYaw, V.rm ? 1 : 1 - Math.exp(-dt * 3.2));
+  GLR.yaw = angLerp(GLR.yaw, chordYaw, V.rm ? 1 : 1 - Math.exp(-dt * (Settings.comfort ? 2 : 3.2)));
   // pick the camera rig
   const R = 560 + CFG.STRETCH * .6;
   let want;
@@ -3467,7 +3552,8 @@ function glRender(alpha, t) {
       const dd = mod1(P.p - e.p), prox = 1 - 2 * Math.min(dd, 1 - dd), same = e.lane === P.lane;
       if (st === 'live' && !WP && S.mode !== 'hunter') Sound.growl(e, pp.x, prox * (same ? 1 : .6));
       const slow = !!(S.fx && S.fx.slow > S.tick);
-      glCar(B, SB, pp.x - CX, pp.y - CY, pp.a, 'enemy', { type: e.type, hop: pp.hop, z, color: flash ? [.95, 1, 1] : slow ? [.47, .59, 1] : null, glow: .25 + .6 * prox * prox * (same ? 1 : .5), glowCol: same && prox > .6 ? [1, .35, .4] : [.3, .9, 1] });
+      if (st === 'live' && !WP) driftFx('e' + e.id, pp, false, t);
+      glCar(B, SB, pp.x - CX, pp.y - CY, pp.a, 'enemy', { type: e.type, hop: pp.hop, roll: pp.roll, steer: pp.steer, z, color: flash ? [.95, 1, 1] : slow ? [.47, .59, 1] : null, glow: .25 + .6 * prox * prox * (same ? 1 : .5), glowCol: same && prox > .6 ? [1, .35, .4] : [.3, .9, 1] });
       if (!WP && S.mode !== 'hunter') glTelegraph(A, S, e, pp);
       if (!WP || WP.ph === 'enter') {       // beacon: a light pillar and a marker you can see through walls (red when it's coming at you)
         const ex = pp.x - CX, ez = pp.y - CY, beat = 60 / S.bpm, tau = mod1(P.p - e.p) / ((lpsOf(S, P) + lpsOf(S, e)) * S.ts), threat = same && tau < 2.2 * beat;
@@ -3489,20 +3575,15 @@ function glRender(alpha, t) {
       if (V.rm) { ph = 0; cz = 0; cs = 1; }
       if (ph > .5) glPipe(B, SB, plx, plz, ph, V.hue);
     }
-    if (showCar && plDrift > .05 && st === 'live' && !WP) {     // drift: tyre smoke and skid marks from the rear wheels
-      const c0 = Math.cos(pla), s0 = Math.sin(pla);
-      for (const sv of [-10, 10]) { const rx = pp.x - c0 * 13 - s0 * sv, rz = pp.y - s0 * 13 + c0 * sv; V.skids.push({ x: rx, y: rz, t: t }); }
-      if (!V.rm && (V.frame++ & 1)) spawnPuffs(pp.x - c0 * 16, pp.y - s0 * 16, 1, { r: 7, grow: 18, life: .5, a: .35 * plDrift, speed: 18, vz: 10 });
-    }
-    if (showCar) glCar(B, SB, plx, plz, pla + spin, 'player', { hop: plHop, z: cz, scale: cs, od: P.od && !WP, glow: P.od ? .9 : .45, glowCol: P.od ? [1, .75, .3] : [1, .95, .85] });
+    V.frame++;
+    if (showCar && st === 'live' && !WP) driftFx('p', pp, true, t);
+    if (showCar) glCar(B, SB, plx, plz, pla + spin, 'player', { hop: plHop, roll: pp.roll, steer: pp.steer, z: cz, scale: cs, od: P.od && !WP, glow: P.od ? .9 : .45, glowCol: P.od ? [1, .75, .3] : [1, .95, .85] });
     V.lastPl = { x: pp.x, y: pp.y };
     // route, door countdown ring and the exits you can take
     if (steer && st === 'live' || (steer && st === 'ready')) glGuides(A, SB, S, P, alpha, t);
   }
   if (CF && App.crash.safe && App.crash.safeShown) { const sf = App.crash.safe, pu = V.rm ? 1 : .65 + .35 * Math.sin(t * 6); glRibbon(A, H[sf.lane], sf.g, sf.g - .25, 12, 1.2, [.1 * pu, .45 * pu, .55 * pu]); glRibbon(A, H[sf.lane], sf.g, sf.g - .25, 3, 1.3, [.6 * pu, .9 * pu, 1 * pu]); }
-  // skid marks fade out over a second and a half
-  for (let i = V.skids.length - 1; i >= 0; i--) { const k = (t - V.skids[i].t) / 1.5; if (k >= 1 || k < 0) { V.skids.splice(i, 1); continue; } sbAdd(SB.dark, V.skids[i].x - CX, .5, V.skids[i].y - CY, 5.6, 5.6, 0, 0, 0, .45 * (1 - k), true); }
-  if (V.skids.length > 400) V.skids.splice(0, V.skids.length - 400);
+  const SKD = glSkids(t);
   // shield bubble, magnet rings
   if (S.fx && !CF && !WP && V.lastPl) {
     const lx = V.lastPl.x - CX, lz = V.lastPl.y - CY, live = k => S.fx[k] > S.tick && ((S.fx[k] - S.tick) / HZ >= 2 || ((S.tick >> 3) & 1) === 0);
@@ -3543,6 +3624,12 @@ function glRender(alpha, t) {
     gl.bindBuffer(gl.ARRAY_BUFFER, GLR.dynA); gl.bufferData(gl.ARRAY_BUFFER, Gb.a.subarray(0, Gb.n * 10), gl.DYNAMIC_DRAW); meshAttr(); gl.drawArrays(gl.TRIANGLES, 0, Gb.n); gl.uniform1f(U.uA, 1);
   }
   gl.enable(gl.BLEND); gl.depthMask(false);
+  if (SKD.n) {                                      // tyre marks darken the road
+    gl.blendFunc(gl.ZERO, gl.ONE_MINUS_SRC_ALPHA); gl.useProgram(GLR.DP.p); gl.uniformMatrix4fv(GLR.DP.u.uVP, false, GLR.VP);
+    gl.bindBuffer(gl.ARRAY_BUFFER, GLR.dec); gl.bufferData(gl.ARRAY_BUFFER, SKD.a.subarray(0, SKD.n * 5), gl.DYNAMIC_DRAW);
+    gl.enableVertexAttribArray(0); gl.enableVertexAttribArray(1); for (let i = 2; i < 5; i++) gl.disableVertexAttribArray(i);
+    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 20, 0); gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 20, 12); gl.drawArrays(gl.TRIANGLES, 0, SKD.n);
+  }
   // shadows (darken)
   const SPP = GLR.SP, SU = SPP.u, sprAttr = () => { for (let i = 0; i < 5; i++) gl.enableVertexAttribArray(i); gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 44, 0); gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 44, 12); gl.vertexAttribPointer(2, 2, gl.FLOAT, false, 44, 20); gl.vertexAttribPointer(3, 4, gl.FLOAT, false, 44, 28); gl.disableVertexAttribArray(4); gl.vertexAttrib1f(4, 0); };
   gl.blendFunc(gl.ZERO, gl.ONE_MINUS_SRC_ALPHA); drawFlat(SB.dark, true);
@@ -3766,7 +3853,7 @@ const MODES = TOUCH ? ['endless', 'daily', 'levels'] : ['endless', 'daily', 'lev
 const orKey = k => TOUCH ? (k === 'in' ? ' (or press IN)' : ' (or press OUT)') : useChase() ? (k === 'in' ? ' (or press ←)' : ' (or press →)') : (k === 'in' ? ' (or press ↓)' : ' (or press ↑)');
 const tapIn = () => useChase() ? 'Tap the LEFT side' : 'Tap INSIDE your lane', tapOut = () => useChase() ? 'Tap the RIGHT side' : 'Tap OUTSIDE your lane';
 const isEndless = () => App.mode === 'endless' || App.mode === 'daily';
-const Settings = Object.assign({ mode: 'endless', muted: false, rm: null, hc: false, hap: false, cam: null, mm: false }, Store.get('settings', {}) || {});
+const Settings = Object.assign({ mode: 'endless', muted: false, rm: null, hc: false, hap: false, cam: null, mm: false, comfort: false }, Store.get('settings', {}) || {});
 const saveSettings = () => Store.set('settings', Settings);
 const App = {
   mode: 'endless', diff: 0, lvl: 0, state: 'boot', S: null, rec: null, ghost: null, hunter: null,
@@ -3826,7 +3913,7 @@ const UI = {
   },
   toggles() {
     const e = this.el, p = (el, v) => el.setAttribute('aria-pressed', v ? 'true' : 'false');
-    p(e.tRM, V.rm); p(e.tHC, Settings.hc); p(e.tHap, Settings.hap); if (e.tCam) p(e.tCam, Settings.cam !== 'classic'); if (e.tMap) p(e.tMap, !!Settings.mm);
+    p(e.tRM, V.rm); p(e.tHC, Settings.hc); p(e.tHap, Settings.hap); if (e.tCam) p(e.tCam, Settings.cam !== 'classic'); if (e.tMap) p(e.tMap, !!Settings.mm); if (e.tCom) p(e.tCom, !!Settings.comfort);
     document.body.classList.toggle('rm', V.rm); document.body.classList.toggle('hc', !!Settings.hc);
   },
   openSettings() { this.el.setPanel.hidden = false; this.el.btnSet.setAttribute('aria-expanded', 'true'); },
@@ -3903,7 +3990,7 @@ function hideCards() { UI.el.resultCard.hidden = true; UI.el.pauseCard.hidden = 
 function prepare() {
   Input.reset(); hideCards(); UI.safe(''); UI.coach('');
   App.crash = null; App.ghost = null; App.snaps = []; App.snapK = null; App.ring = [];
-  V.trails.clear(); V.parts.length = 0; V.pops.length = 0; V.floaters.length = 0; V.puffs.length = 0; V.skids.length = 0; V.p0.clear(); V.split.clear(); V.wfx = null; V.shake = 0;
+  V.trails.clear(); V.parts.length = 0; V.pops.length = 0; V.floaters.length = 0; V.puffs.length = 0; V.skids.length = 0; V.skidA = {}; V.p0.clear(); V.split.clear(); V.wfx = null; V.shake = 0;
   Sound.stopRun();
   const m = App.mode, st = fitStretch();
   if (m === 'levels') {
@@ -4047,7 +4134,7 @@ function handleEvents(S, at) {
       UI.coach(''); UI.live(`Level ${e.level - 1} clear. Warping to a new track.`);
       break;
     }
-    case 'warpSwap': V.hue = S.hue; buildStatic(); V.trails.clear(); V.p0.clear(); App.immuneUntil = performance.now() + 1500; UI.live(`Level ${S.level}. ${stepText(V.wfx ? V.wfx.step : {}, S.level, S.bpm)}.`); break;
+    case 'warpSwap': V.hue = S.hue; buildStatic(); V.trails.clear(); V.p0.clear(); V.skids.length = 0; V.skidA = {}; App.immuneUntil = performance.now() + 1500; UI.live(`Level ${S.level}. ${stepText(V.wfx ? V.wfx.step : {}, S.level, S.bpm)}.`); break;
     case 'warpEnd': Sound.warpDuck(false); Sound.resync(S); V.wfx = null; break;
     case 'puSpawn': Sound.puSpawn(at); if (!Store.get('puSeen', false)) { Store.set('puSeen', true); UI.coach('A power-up appeared — drive through the glowing orb to grab it', 4.5); } break;
     case 'pu': { if (App.run) App.run.pu++; const q = plPos(), pw = POWERUPS[e.kind]; Sound.puGet(at, e.kind); UI.banner(pw.name.toUpperCase() + '! · ' + pw.desc); floater(pw.name.toUpperCase(), q.x, q.y, pw.color); spawnSparks(q.x, q.y, 14, pw.color, 300); buzz([20, 20, 20]); UI.live(pw.name + ': ' + pw.desc + '.'); break; }
@@ -4431,7 +4518,8 @@ function boot() {
   E.btnHelp.addEventListener('click', () => UI.showHelp());
   E.tCam.addEventListener('click', () => setCam(Settings.cam === 'classic' ? 'chase' : 'classic'));
   E.tMap.addEventListener('click', () => { Settings.mm = !Settings.mm; saveSettings(); UI.toggles(); });
-  if (!GLR.ok) { E.tCam.hidden = true; E.tMap.hidden = true; }
+  E.tCom.addEventListener('click', () => { Settings.comfort = !Settings.comfort; saveSettings(); UI.toggles(); UI.toast(Settings.comfort ? 'COMFORT CAMERA ON' : 'COMFORT CAMERA OFF'); });
+  if (!GLR.ok) { E.tCam.hidden = true; E.tMap.hidden = true; E.tCom.hidden = true; }
   E.btnGarage.addEventListener('click', e => { e.stopPropagation(); garageOpen(); });
   E.btnGarageOk.addEventListener('click', () => garageClose());
   E.skinGrid.addEventListener('click', e => { const b = e.target.closest('.skin'); if (b) garagePick(b.dataset.id); });
