@@ -7,7 +7,7 @@ A playable prototype of a modern, single-input remake of Dodge 'Em. It's one sel
 ## How to play
 
 - Your car drives itself counter-clockwise. Cyan crash cars drive the other way. You switch lanes at the glowing doors.
-- **Chase camera (default):** a low 3D camera rides behind your car.
+- **Chase camera (default):** a third-person 3D camera rides behind and above your car.
   - Tap the **left** side to move in (toward the middle) and the **right** side to move out.
   - **Hold** the middle to boost with Overdrive.
   - On phones there's also an IN / BOOST / OUT pad.
