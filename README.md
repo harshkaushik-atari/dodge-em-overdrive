@@ -11,7 +11,7 @@ A playable prototype of a modern, single-input remake of Dodge 'Em. It's one sel
   - Tap the **left** side to move in (toward the middle) and the **right** side to move out.
   - **Hold** the middle to boost with Overdrive.
   - On phones there's also an IN / BOOST / OUT pad.
-  - A minimap and **HEAD-ON!** warnings show what's coming.
+  - Rival cars glow and carry a light beacon you can see through walls. It turns red, with a **HEAD-ON!** warning, when one is coming at you in your lane. Arrows at the screen edge point to rivals just out of view. A minimap is optional (Settings → Minimap).
 - **Classic camera:** in Settings, turn off *Chase camera* (or press `C` between runs). This gives the top-down view, where you tap inside or outside your lane.
 - Grab gold gems for points, and drive through power-up orbs: Shield, Magnet, Slow-mo, Double.
 - Keyboard: `←`/`↓` in · `→`/`↑` out · `Space` hold to boost · `P` pause · `C` camera.

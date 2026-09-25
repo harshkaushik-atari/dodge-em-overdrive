@@ -248,6 +248,7 @@ kbd{font:600 11px var(--fd);color:var(--pl);border:1px solid var(--edge);border-
     </div>
     <div class="pop" id="setPanel" role="group" aria-label="Settings" hidden>
       <button class="tog" type="button" id="tCam" aria-pressed="true">Chase camera (C)<i aria-hidden="true"></i></button>
+      <button class="tog" type="button" id="tMap" aria-pressed="false">Minimap<i aria-hidden="true"></i></button>
       <button class="tog" type="button" id="tRM" aria-pressed="false">Reduced motion<i aria-hidden="true"></i></button>
       <button class="tog" type="button" id="tHC" aria-pressed="false">High contrast<i aria-hidden="true"></i></button>
       <button class="tog" type="button" id="tHap" aria-pressed="false">Haptics<i aria-hidden="true"></i></button>
@@ -415,10 +416,10 @@ const DIFFS = [
   { id: 'hell', name: 'Hell', bpm: 160, ratio: 9 / 10, cutoff: 120, levelS: 24, brake: null, mult: 1.6, fleet: ['interceptor', 'pacer'], spawns: [{ level: 6, type: 'splitter' }], hesitate: .08 },
 ];
 // Endless ladder: step i is applied on reaching level i + 2. One change per level.
-// It starts slow (80 BPM) so the first minute or two is for learning.
-const ENDLESS_TIER_BPM = [80, 108, 128, 150];  // TUNABLE tempo floor when each tier begins
+// It starts slow (62 BPM) so the first minute or two is for learning.
+const ENDLESS_TIER_BPM = [62, 92, 116, 140];   // TUNABLE tempo floor when each tier begins
 const ENDLESS = [
-  { bpm: 4 }, { bpm: 4 }, { bpm: 4 },           // L2–L4 Easy: 84 → 92
+  { bpm: 5 }, { bpm: 5 }, { bpm: 5 },           // L2–L4 Easy: 67 → 77
   { tier: 1 },                                  // L5  → Medium
   { spawn: 'splitter' }, { bpm: 4 }, { bpm: 4 },
   { tier: 2 },                                  // L9  → Difficult
@@ -433,18 +434,18 @@ const ENDLESS = [
 // gets a random track (shape, colour, walled doors); doors = most doors that may be walled;
 // wild = how strange the shape may be (0 = the classic rounded square).
 const LEVELS = [
-  { name: 'Warm-Up', tier: 0, bpm: 70, fleet: [], doors: 0, wild: 0, goal: { t: 'markers', n: 40 } },
-  { name: 'First Rival', tier: 0, bpm: 76, fleet: ['chaser'], doors: 0, wild: 0, goal: { t: 'survive', n: 25 } },
-  { name: 'Gem Rush', tier: 0, bpm: 82, fleet: ['chaser'], doors: 0, wild: 0.2, goal: { t: 'markers', n: 80 } },
-  { name: 'Detour', tier: 0, bpm: 88, fleet: ['chaser'], doors: 2, wild: 0.3, goal: { t: 'markers', n: 100 } },
-  { name: 'Clean Sweep', tier: 1, bpm: 98, fleet: ['chaser'], doors: 1, wild: 0.4, goal: { t: 'clear' } },
-  { name: 'Crossfire', tier: 1, bpm: 106, fleet: ['chaser', 'splitter'], doors: 2, wild: 0.5, goal: { t: 'survive', n: 35 } },
-  { name: 'Close Calls', tier: 1, bpm: 112, fleet: ['interceptor'], doors: 3, wild: 0.6, goal: { t: 'dodges', n: 4 } },
-  { name: 'Gauntlet', tier: 1, bpm: 118, fleet: ['chaser', 'splitter'], doors: 4, wild: 0.7, goal: { t: 'markers', n: 160 } },
-  { name: 'Endurance', tier: 2, bpm: 128, fleet: ['interceptor'], doors: 3, wild: 0.8, goal: { t: 'survive', n: 45 } },
-  { name: 'Full Circuit', tier: 2, bpm: 134, fleet: ['interceptor', 'pacer'], doors: 4, wild: 0.9, goal: { t: 'clear' } },
-  { name: 'Last Doors', tier: 3, bpm: 146, fleet: ['interceptor', 'pacer'], doors: 6, wild: 1, goal: { t: 'survive', n: 50 } },
-  { name: 'Overdrive', tier: 3, bpm: 158, fleet: ['interceptor', 'pacer', 'splitter'], doors: 4, wild: 1, goal: { t: 'markers', n: 240 } },
+  { name: 'Warm-Up', tier: 0, bpm: 56, fleet: [], doors: 0, wild: 0, goal: { t: 'markers', n: 40 } },
+  { name: 'First Rival', tier: 0, bpm: 62, fleet: ['chaser'], doors: 0, wild: 0, goal: { t: 'survive', n: 25 } },
+  { name: 'Gem Rush', tier: 0, bpm: 68, fleet: ['chaser'], doors: 0, wild: 0.2, goal: { t: 'markers', n: 80 } },
+  { name: 'Detour', tier: 0, bpm: 74, fleet: ['chaser'], doors: 2, wild: 0.3, goal: { t: 'markers', n: 100 } },
+  { name: 'Clean Sweep', tier: 1, bpm: 84, fleet: ['chaser'], doors: 1, wild: 0.4, goal: { t: 'clear' } },
+  { name: 'Crossfire', tier: 1, bpm: 92, fleet: ['chaser', 'splitter'], doors: 2, wild: 0.5, goal: { t: 'survive', n: 35 } },
+  { name: 'Close Calls', tier: 1, bpm: 100, fleet: ['interceptor'], doors: 3, wild: 0.6, goal: { t: 'dodges', n: 4 } },
+  { name: 'Gauntlet', tier: 1, bpm: 108, fleet: ['chaser', 'splitter'], doors: 4, wild: 0.7, goal: { t: 'markers', n: 160 } },
+  { name: 'Endurance', tier: 2, bpm: 118, fleet: ['interceptor'], doors: 3, wild: 0.8, goal: { t: 'survive', n: 45 } },
+  { name: 'Full Circuit', tier: 2, bpm: 126, fleet: ['interceptor', 'pacer'], doors: 4, wild: 0.9, goal: { t: 'clear' } },
+  { name: 'Last Doors', tier: 3, bpm: 138, fleet: ['interceptor', 'pacer'], doors: 6, wild: 1, goal: { t: 'survive', n: 50 } },
+  { name: 'Overdrive', tier: 3, bpm: 150, fleet: ['interceptor', 'pacer', 'splitter'], doors: 4, wild: 1, goal: { t: 'markers', n: 240 } },
 ];
 const HUE0 = 262;                                                    // default track accent (violet)
 const POWERUPS = {
@@ -2980,7 +2981,7 @@ function renderHUD(alpha, t) {
     const pu = V.rm ? 1 : .6 + .4 * Math.sin(t * 16), gr = g.createRadialGradient(W / 2, Hh / 2, Math.min(W, Hh) * .35, W / 2, Hh / 2, Math.hypot(W, Hh) * .6);
     gr.addColorStop(0, 'rgba(255,30,60,0)'); gr.addColorStop(1, `rgba(255,30,60,${(.42 * warn * pu).toFixed(3)})`);
     g.fillStyle = gr; g.fillRect(0, 0, W, Hh);
-    if (warn > .5) hudText(g, 'HEAD-ON!', W / 2, Hh * .2 + big * 1.6, big * .55, '#FF4757', 'center', pu);
+    if (warn > .5) hudText(g, 'HEAD-ON!', W / 2, Hh * .2 + big * 1.6, big * .8, pu > .85 ? '#FFFFFF' : '#FF6B78', 'center', 1);
   }
   // score + multiplier (top centre), boost bar under it, power-ups under that
   if (!(WP && WP.ph !== 'enter') && st !== 'ready') {
@@ -3002,9 +3003,24 @@ function renderHUD(alpha, t) {
       g.fillStyle = 'rgba(255,255,255,.1)'; rr(g, pad, pad + big * 1.4, pw, 4 * dpr, 2 * dpr); g.fill();
       g.fillStyle = '#05D9E8'; rr(g, pad, pad + big * 1.4, Math.max(4 * dpr, pw * pr), 4 * dpr, 2 * dpr); g.fill();
     } else if (S.mode === 'campaign') hudText(g, 'LEVEL ' + (App.lvl + 1), pad, pad + big * .5, big * .42, '#FFFFFF', 'left', 1, false);
-    // minimap (top right)
-    const ms = Math.round(Math.min(W * (W > Hh ? .2 : .27), Hh * .3, 210 * dpr));
-    drawMinimap(g, S, W - ms - pad, pad, ms, t);
+    // minimap (top right) — optional, off unless switched on in Settings
+    if (Settings.mm) { const ms = Math.round(Math.min(W * (W > Hh ? .2 : .27), Hh * .3, 210 * dpr)); drawMinimap(g, S, W - ms - pad, pad, ms, t); }
+    // rivals coming your way but out of view: an arrow at the screen edge (red if it's in your lane)
+    if (live && !WP && !CF) for (const e of S.enemies) {
+      if (mod1(P.p - e.p) > .5) continue;                                 // it's driving away from you
+      const pp = {}; carPos(e, e.p, S.tick, pp);
+      const o = glProject(pp.x - CX, 20, pp.y - CY), m = 26 * dpr;
+      if (o && o.x > m && o.x < W - m && o.y > m && o.y < Hh - m) continue;
+      let dx, dy;
+      if (o) { dx = o.x - W / 2; dy = o.y - Hh / 2; } else { const b = glProject(pp.x - CX, 20, pp.y - CY, {}) || null; const vx = pp.x - CX - GLR.eye[0], vz = pp.y - CY - GLR.eye[2], fx = GLR.tgt[0] - GLR.eye[0], fz = GLR.tgt[2] - GLR.eye[2]; dx = vx * fz - vz * fx > 0 ? -1 : 1; dy = .3; }
+      const L = Math.hypot(dx, dy) || 1; dx /= L; dy /= L;
+      const kx = dx ? (W / 2 - m) / Math.abs(dx) : 1e9, ky = dy ? (Hh / 2 - m) / Math.abs(dy) : 1e9, k = Math.min(kx, ky), ax = W / 2 + dx * k, ay = Hh / 2 + dy * k;
+      const same = e.lane === P.lane, col = same ? '#FF4757' : '#3DE8FF', r = (same ? 13 : 10) * dpr, pu = V.rm ? 1 : .7 + .3 * Math.sin(t * (same ? 14 : 5));
+      g.save(); g.translate(ax, ay); g.rotate(Math.atan2(dy, dx)); g.globalAlpha = pu;
+      g.fillStyle = col; g.strokeStyle = 'rgba(8,4,18,.9)'; g.lineWidth = 2 * dpr;
+      g.beginPath(); g.moveTo(r, 0); g.lineTo(-r * .8, -r * .75); g.lineTo(-r * .45, 0); g.lineTo(-r * .8, r * .75); g.closePath(); g.fill(); g.stroke();
+      g.restore();
+    }
   }
   // floating texts anchored in the world
   const dtp = V.dtFrame || 0;
@@ -3238,7 +3254,7 @@ function skinCols(t) {
 }
 // One car into the dynamic buffers (B opaque, A additive, SB sprites).
 function glCar(B, SB, x, z, ang, kind, o) {
-  const M = CAR_M[kind === 'player' ? 'player' : 'enemy'], c = Math.cos(ang), s = Math.sin(ang), k = (o.scale || 1) * (kind === 'player' ? 1.12 : 1), lift = (o.z || 0) + (o.hop || 0) * 7, cm = 1 - .72 * (o.char || 0);
+  const M = CAR_M[kind === 'player' ? 'player' : 'enemy'], c = Math.cos(ang), s = Math.sin(ang), k = (o.scale || 1) * (kind === 'player' ? 1.12 : 1.18), lift = (o.z || 0) + (o.hop || 0) * 7, cm = 1 - .72 * (o.char || 0);
   let body, side, stripe;
   if (kind === 'player') { const sk = skinCols(GLR.t); body = sk.body; side = sk.side; stripe = sk.stripe; } else { body = c255(M.top); side = c255(M.side); stripe = null; }
   if (o.color) { body = o.color; side = o.color.map(v => v * .7); }
@@ -3249,7 +3265,7 @@ function glCar(B, SB, x, z, ang, kind, o) {
   sbAdd(SB.dark, x + SHADOW.x * (8 + lift), .6, z + SHADOW.y * (8 + lift), 30 * k, 22 * k, 0, 0, 0, .75 * fall, true);
   if (o.glow > 0) { const g = o.glowCol || [1, .95, .85]; sbAdd(SB.add, x, .7, z, 48 * k, 48 * k, g[0], g[1], g[2], o.glow * fall * .7, true); }
   for (const w of M.wheels) { const p = at(w[0], w[1]); glPrism(B, WHEEL, p[0], p[1], c, s, k, Y(0), Y(6), [.2, .2, .26], [.08, .08, .1], 0); }
-  glPrism(B, M.hull, x, z, c, s, k, Y(M.hz[0]), Y(M.hz[1]), body, side, 0);
+  glPrism(B, M.hull, x, z, c, s, k, Y(M.hz[0]), Y(M.hz[1]), body, side, kind === 'player' ? 0 : .45, kind === 'player' ? 0 : .32);   // rivals glow so they read in shade and fog
   const glass = (o.color ? o.color.map(v => v * .35) : c255(M.glass)).map(v => v * cm);
   glPrism(B, M.cab, x, z, c, s, k, Y(M.cz[0]), Y(M.cz[1]), glass.map(v => v * 1.4), glass.map(v => v * 1.8), 0);
   const quadTop = (pts, h, col, e) => { const P = pts.map(([u, v]) => { const p = at(u, v); return [p[0], Y(h), p[1]]; }); mbQuad(B, P[0], P[1], P[2], P[3], [0, 1, 0], col, col, e); };
@@ -3267,7 +3283,8 @@ function glCar(B, SB, x, z, ang, kind, o) {
     const hu = M.hull[0][0] - .5, L = (u, v, h) => { const p = at(u, v); return [p[0], Y(h), p[1]]; };
     for (const sv of [-5, 5]) { const p = L(hu, sv, 5.5); sbAdd(SB.add, p[0], p[1], p[2], 7 * k, 7 * k, 1, .97, .9, .95, false); }
     const beam = kind === 'player' ? [1, .95, .8] : [.5, .9, 1];     // headlight pools on the road ahead
-    { const p = at(hu + 40, 0); sbAdd(SB.add, p[0], .7, p[1], 26 * k, 34 * k, beam[0], beam[1], beam[2], kind === 'player' ? .32 : .22, true); }
+    { const p = at(hu + 40, 0); sbAdd(SB.add, p[0], .7, p[1], 26 * k, 34 * k, beam[0], beam[1], beam[2], kind === 'player' ? .32 : .42, true); }
+    if (kind !== 'player') { const p = at(hu + 90, 0); sbAdd(SB.add, p[0], .7, p[1], 34 * k, 70 * k, beam[0], beam[1], beam[2], .22, true); }
     if (kind === 'player') for (const sv of [-6.5, 6.5]) { const p = L(-19, sv, 5.5); sbAdd(SB.add, p[0], p[1], p[2], 6 * k, 6 * k, 1, .2, .25, .9, false); }
     else {
       const on = (Math.floor(performance.now() / 200) & 1) === 0;
@@ -3356,8 +3373,8 @@ function glProject(x, y, z, o = {}) {
 
 // ---- camera rigs ----
 function camChase(px, pz, yaw, od) {
-  const tall = V.H > V.W, d = (tall ? 132 : 112) - (od ? 12 : 0), h = tall ? 84 : 60, la = tall ? 185 : 175, cx = Math.cos(yaw), cz = Math.sin(yaw);
-  return { e: [px - cx * d, h, pz - cz * d], t: [px + cx * la, 4, pz + cz * la], fov: od ? 70 : 62 };
+  const tall = V.H > V.W, d = (tall ? 168 : 150) - (od ? 14 : 0), h = tall ? 150 : 112, la = tall ? 150 : 165, cx = Math.cos(yaw), cz = Math.sin(yaw);   // a third-person chase: back and above the car
+  return { e: [px - cx * d, h, pz - cz * d], t: [px + cx * la, 6, pz + cz * la], fov: od ? 66 : 60 };
 }
 function camOrbit(t, R, h, cx = 0, cz = 0, sp = .1) { const a = t * sp; return { e: [cx + Math.cos(a) * R, h, cz + Math.sin(a) * R], t: [cx, 0, cz], fov: 50 }; }
 function camSetRig(name, dur) { if (GLR.rig === name) return; GLR.from = { e: GLR.eye.slice(), t: GLR.tgt.slice(), fov: GLR.fovDeg || 60 }; GLR.rig = name; GLR.blendT0 = GLR.t; GLR.blendD = GLR.inited ? dur : 0; GLR.inited = true; }
@@ -3395,7 +3412,7 @@ function glRender(alpha, t) {
   if (asp < 1) GLR.fov = clamp(2 * Math.atan(Math.tan(GLR.fov / 2) * .78 / asp), GLR.fov, 1.5);
   GLR.Pr = m4persp(GLR.fov, asp, 3, 6000); GLR.V = m4look(GLR.eye, GLR.tgt); GLR.VP = m4mul(GLR.Pr, GLR.V);
   // ---- dynamic geometry
-  const B = GLR.mb, A = GLR.ab, SB = { add: mkSBview(0), dark: mkSBview(1), smoke: mkSBview(2) };
+  const B = GLR.mb, A = GLR.ab, SB = { add: mkSBview(0), dark: mkSBview(1), smoke: mkSBview(2), xray: mkSBview(3) };
   B.n = 0; A.n = 0;
   const steer = !WP || (WP.ph === 'enter' && WP.v > .62);
   const fwdX = Math.cos(GLR.yaw), fwdZ = Math.sin(GLR.yaw);
@@ -3433,6 +3450,14 @@ function glRender(alpha, t) {
       const slow = !!(S.fx && S.fx.slow > S.tick);
       glCar(B, SB, pp.x - CX, pp.y - CY, pp.a, 'enemy', { type: e.type, hop: pp.hop, z, color: flash ? [.95, 1, 1] : slow ? [.47, .59, 1] : null, glow: .25 + .6 * prox * prox * (same ? 1 : .5), glowCol: same && prox > .6 ? [1, .35, .4] : [.3, .9, 1] });
       if (!WP && S.mode !== 'hunter') glTelegraph(A, S, e, pp);
+      if (!WP || WP.ph === 'enter') {       // beacon: a light pillar and a marker you can see through walls (red when it's coming at you)
+        const ex = pp.x - CX, ez = pp.y - CY, beat = 60 / S.bpm, tau = mod1(P.p - e.p) / ((lpsOf(S, P) + lpsOf(S, e)) * S.ts), threat = same && tau < 2.2 * beat;
+        const col = threat ? [1, .28, .32] : [.3, .92, 1], pu = V.rm ? 1 : .75 + .25 * Math.sin(t * (threat ? 14 : 4) + e.id);
+        sbAdd(SB.add, ex, z + 12, ez, 46, 34, col[0], col[1], col[2], (threat ? .55 : .32) * pu, false);   // halo around the car
+        sbAdd(SB.add, ex, z + 56, ez, 5, 38, col[0], col[1], col[2], .6 * pu, false);
+        sbAdd(SB.xray, ex, z + 86, ez, threat ? 26 : 17, threat ? 26 : 17, col[0], col[1], col[2], (threat ? 1 : .8) * pu, false);
+        if (threat) glRing(A, ex, ez, 30, 2.2, 0, Math.PI * 2, 1.2, [.9 * pu, .18 * pu, .22 * pu]);
+      }
     });
     const G = App.ghost;
     if (G && !G.done && !WP) { carPos(G.S.player, G.p0 + (G.S.player.p - G.p0) * alpha, G.S.tick - 1 + alpha, pp); GLR.ghostAt = [pp.x - CX, pp.y - CY, pp.a]; } else GLR.ghostAt = null;
@@ -3502,6 +3527,7 @@ function glRender(alpha, t) {
   gl.blendFunc(gl.ONE, gl.ONE);
   if (GLR.sglowN) { gl.useProgram(SPP.p); gl.uniformMatrix4fv(SU.uV, false, GLR.V); gl.uniformMatrix4fv(SU.uPr, false, GLR.Pr); gl.uniform1f(SU.uDark, 0); gl.bindBuffer(gl.ARRAY_BUFFER, GLR.sglow); sprAttr(); gl.drawArrays(gl.TRIANGLES, 0, GLR.sglowN); }
   drawFlat(SB.add, false);
+  gl.disable(gl.DEPTH_TEST); drawFlat(SB.xray, false); gl.enable(gl.DEPTH_TEST);     // rival markers show through walls
   gl.depthMask(true); gl.disable(gl.BLEND);
   function drawFlat(sb, dark) {
     // each view holds billboard and ground-flat sprites in separate writers
@@ -3514,9 +3540,9 @@ function glRender(alpha, t) {
   }
 }
 // Sprite views: each keeps billboards and ground-flat sprites apart (a per-draw flag).
-const _SBV = [0, 1, 2].map(() => ({ bill: mkSB(600), flat: mkSB(200) }));
+const _SBV = [0, 1, 2, 3].map(() => ({ bill: mkSB(600), flat: mkSB(200) }));
 function mkSBview(i) { const v = _SBV[i]; v.bill.n = 0; v.flat.n = 0; return v; }
-const _SBG = { bill: mkSB(40), flat: mkSB(40) }, SB_GHOST = { add: _SBG, dark: _SBG, smoke: _SBG };
+const _SBG = { bill: mkSB(40), flat: mkSB(40) }, SB_GHOST = { add: _SBG, dark: _SBG, smoke: _SBG, xray: _SBG };
 // Route to the next usable door, a draining ring on it, and big chevrons for the exits you can take.
 function glGuides(A, SB, S, P, alpha, t) {
   const d = P, p = interpP(P, 0, alpha), c = d.cmd, dir = d.sign;
@@ -3712,7 +3738,7 @@ const MODES = TOUCH ? ['endless', 'daily', 'levels'] : ['endless', 'daily', 'lev
 const orKey = k => TOUCH ? (k === 'in' ? ' (or press IN)' : ' (or press OUT)') : useChase() ? (k === 'in' ? ' (or press ←)' : ' (or press →)') : (k === 'in' ? ' (or press ↓)' : ' (or press ↑)');
 const tapIn = () => useChase() ? 'Tap the LEFT side' : 'Tap INSIDE your lane', tapOut = () => useChase() ? 'Tap the RIGHT side' : 'Tap OUTSIDE your lane';
 const isEndless = () => App.mode === 'endless' || App.mode === 'daily';
-const Settings = Object.assign({ mode: 'endless', muted: false, rm: null, hc: false, hap: false, cam: null }, Store.get('settings', {}) || {});
+const Settings = Object.assign({ mode: 'endless', muted: false, rm: null, hc: false, hap: false, cam: null, mm: false }, Store.get('settings', {}) || {});
 const saveSettings = () => Store.set('settings', Settings);
 const App = {
   mode: 'endless', diff: 0, lvl: 0, state: 'boot', S: null, rec: null, ghost: null, hunter: null,
@@ -3772,7 +3798,7 @@ const UI = {
   },
   toggles() {
     const e = this.el, p = (el, v) => el.setAttribute('aria-pressed', v ? 'true' : 'false');
-    p(e.tRM, V.rm); p(e.tHC, Settings.hc); p(e.tHap, Settings.hap); if (e.tCam) p(e.tCam, Settings.cam !== 'classic');
+    p(e.tRM, V.rm); p(e.tHC, Settings.hc); p(e.tHap, Settings.hap); if (e.tCam) p(e.tCam, Settings.cam !== 'classic'); if (e.tMap) p(e.tMap, !!Settings.mm);
     document.body.classList.toggle('rm', V.rm); document.body.classList.toggle('hc', !!Settings.hc);
   },
   openSettings() { this.el.setPanel.hidden = false; this.el.btnSet.setAttribute('aria-expanded', 'true'); },
@@ -4376,7 +4402,8 @@ function boot() {
   for (const b of [E.padIn, E.padOut, E.padBoost]) { b.addEventListener('pointerup', padUp); b.addEventListener('pointercancel', padUp); b.addEventListener('pointerleave', padUp); b.addEventListener('contextmenu', e => e.preventDefault()); }
   E.btnHelp.addEventListener('click', () => UI.showHelp());
   E.tCam.addEventListener('click', () => setCam(Settings.cam === 'classic' ? 'chase' : 'classic'));
-  if (!GLR.ok) E.tCam.hidden = true;
+  E.tMap.addEventListener('click', () => { Settings.mm = !Settings.mm; saveSettings(); UI.toggles(); });
+  if (!GLR.ok) { E.tCam.hidden = true; E.tMap.hidden = true; }
   E.btnGarage.addEventListener('click', e => { e.stopPropagation(); garageOpen(); });
   E.btnGarageOk.addEventListener('click', () => garageClose());
   E.skinGrid.addEventListener('click', e => { const b = e.target.closest('.skin'); if (b) garagePick(b.dataset.id); });
