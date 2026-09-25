@@ -104,7 +104,20 @@ body.hc .fx-grain,body.hc .fx-vig{display:none}
 .howto li{display:flex;gap:14px;align-items:center;font-size:13px;line-height:1.4;color:#d9d0c6}
 .howto li b{color:#fff}
 .howto svg{flex:none;width:56px;height:40px}
-.keys{margin:16px 0 0;font-size:11px;color:var(--n3);text-align:center}
+.keys{margin:12px 0 0;font-size:11px;color:var(--n3);text-align:center;line-height:2}
+.ctrls{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:16px}
+.ctrl-col{border:1px solid rgba(185,103,255,.35);border-radius:12px;padding:10px 10px 6px;background:rgba(255,255,255,.02)}
+.ctrl-h{font:400 8px/1 var(--px,monospace);letter-spacing:.04em;color:var(--neo2,#05D9E8);margin-bottom:8px;text-shadow:1px 0 var(--neo1,#FF2A6D)}
+.krow{display:flex;align-items:center;gap:9px;min-height:30px;font-size:12px;line-height:1.3;color:#d9d0c6;margin-bottom:4px}
+.krow b{color:#fff}
+.key{display:inline-flex;align-items:center;justify-content:center;flex:none;min-width:28px;height:26px;padding:0 6px;border-radius:7px;border:1px solid rgba(255,255,255,.35);border-bottom-width:4px;background:linear-gradient(#2a1d44,#16102a);color:#fff;font:400 10px/1 var(--px,monospace);box-shadow:0 0 10px rgba(5,217,232,.25)}
+.key.wide{min-width:54px;font-size:8px}
+.key.sm{min-width:22px;height:20px;border-bottom-width:3px;font-size:8px;margin:0 2px;vertical-align:middle}
+.key.sm.wide{min-width:40px;font-size:7px}
+.howto .tico{width:28px;height:28px;flex:none}
+.keys .nw{white-space:nowrap}
+@media (pointer:coarse){.ctrl-col.touch{order:-1}}
+@media (max-width:420px){.ctrls{grid-template-columns:1fr;gap:8px;margin-top:12px}.ctrl-col{display:grid;grid-template-columns:1fr 1fr;column-gap:8px;padding:8px 8px 4px}.ctrl-h{grid-column:1/-1}.krow{font-size:11px;gap:7px;min-height:28px}.howto .tico{width:24px;height:24px}.howto ol{gap:6px;margin-top:12px}.howto li{font-size:12px;gap:10px}.howto li svg{width:44px;height:32px}.keys{margin-top:8px}}
 kbd{font:600 11px var(--fd);color:var(--pl);border:1px solid var(--edge);border-radius:6px;padding:1px 5px}
 .howto .actions{justify-content:center}
 /* ===== Arcade theme: pixel type, RGB highlights, neon synthwave ===== */
@@ -231,12 +244,27 @@ kbd{font:600 11px var(--fd);color:var(--pl);border:1px solid var(--edge);border-
   <ol>
     <li><svg viewBox="0 0 56 40" aria-hidden="true"><path d="M22 2h12l-6 7z" fill="#E01E2B"/><rect x="8" y="14" width="40" height="20" rx="10" fill="#FFF3E6"/><rect x="8" y="22" width="40" height="4" fill="#E01E2B"/><rect x="31" y="17" width="7" height="14" rx="2" fill="#0B0B10" opacity=".85"/><ellipse cx="28" cy="24" rx="26" ry="14" fill="none" stroke="#FFF3E6" stroke-opacity=".35" stroke-width="1.5"/></svg><div><b>This is you.</b> Your car drives itself, counter-clockwise.</div></li>
     <li><svg viewBox="0 0 56 40" aria-hidden="true"><path d="M50 20L16 7H7l5 13-5 13h9z" fill="#3DE8FF"/><path d="M29 14l6 6-6 6" stroke="#0B1A20" stroke-width="3" fill="none" stroke-linejoin="round"/><circle cx="21" cy="20" r="3.2" fill="#FF3B47"/></svg><div><b>Cyan cars</b> drive the other way. Never meet one in your lane.</div></li>
-    <li><svg viewBox="0 0 56 40" aria-hidden="true"><rect x="2" y="2" width="52" height="36" rx="11" fill="none" stroke="#8A8A9A" stroke-width="1.4"/><rect x="11" y="9" width="34" height="22" rx="7" fill="none" stroke="#E01E2B" stroke-width="2.4"/><rect x="20" y="15" width="16" height="10" rx="4" fill="none" stroke="#8A8A9A" stroke-width="1.4"/><circle cx="28" cy="9" r="3.2" fill="#FFF3E6"/><path d="M28 20v-4m-2.5 2.5L28 16l2.5 2.5" stroke="#FFC247" stroke-width="1.8" fill="none" stroke-linecap="round"/><path d="M50 28v5m-2.5-2.5L50 33l2.5-2.5" stroke="#FFC247" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg><div><b>Tap inside</b> your lane to move in, <b>outside</b> to move out.</div></li>
     <li><svg viewBox="0 0 56 40" aria-hidden="true"><path d="M4 13h16M36 13h16M4 27h16M36 27h16" stroke="#4A4A62" stroke-width="4" stroke-linecap="round"/><circle cx="20" cy="13" r="3" fill="#FF6A74"/><circle cx="36" cy="13" r="3" fill="#FF6A74"/><circle cx="20" cy="27" r="3" fill="#FF6A74"/><circle cx="36" cy="27" r="3" fill="#FF6A74"/><path d="M24 17l4-4 4 4M24 23l4 4 4-4" stroke="#FFF3E6" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg><div>You switch lanes at the <b>glowing doors</b> in the walls.</div></li>
     <li><svg viewBox="0 0 56 40" aria-hidden="true"><path d="M28 3l11 17-11 17-11-17z" fill="#FFC247"/><path d="M28 3l11 17H17z" fill="#FFE08A"/><circle cx="24" cy="12" r="1.8" fill="#fff"/></svg><div>Grab <b>gold gems</b> for points. <b>Hold</b> for an Overdrive boost.</div></li>
     <li><svg viewBox="0 0 56 40" aria-hidden="true"><circle cx="11" cy="20" r="7" fill="#7DF9FF"/><circle cx="24" cy="20" r="7" fill="#FF2A6D"/><circle cx="37" cy="20" r="7" fill="#6E8BFF"/><circle cx="50" cy="20" r="5.5" fill="#FFD300"/></svg><div><b>Power-ups</b> float above the track — Shield, Magnet, Slow-mo, Double. Drive through to grab one.</div></li>
   </ol>
-  <p class="keys">Keyboard: <kbd>↓</kbd> in · <kbd>↑</kbd> out · <kbd>Space</kbd> hold to boost · <kbd>P</kbd> pause</p>
+  <div class="ctrls" aria-label="Controls">
+    <div class="ctrl-col">
+      <div class="ctrl-h">Keyboard</div>
+      <div class="krow"><kbd class="key">↓</kbd><span>Move <b>in</b> one lane</span></div>
+      <div class="krow"><kbd class="key">↑</kbd><span>Move <b>out</b> one lane</span></div>
+      <div class="krow"><kbd class="key wide">Space</kbd><span><b>Hold</b> to boost</span></div>
+      <div class="krow"><kbd class="key">P</kbd><span>Pause</span></div>
+    </div>
+    <div class="ctrl-col touch">
+      <div class="ctrl-h">Touch</div>
+      <div class="krow"><svg class="tico" viewBox="0 0 32 32" aria-hidden="true"><rect x="3" y="3" width="26" height="26" rx="8" fill="none" stroke="#FF2A6D" stroke-width="2.4"/><circle cx="16" cy="16" r="3.6" fill="#FFD300"/><path d="M16 11v-3" stroke="#FFD300" stroke-width="2" stroke-linecap="round"/></svg><span>Tap <b>inside</b> your lane → in</span></div>
+      <div class="krow"><svg class="tico" viewBox="0 0 32 32" aria-hidden="true"><rect x="9" y="9" width="14" height="14" rx="5" fill="none" stroke="#FF2A6D" stroke-width="2.4"/><circle cx="16" cy="3.8" r="3.3" fill="#FFD300"/><circle cx="28.2" cy="16" r="3.3" fill="#FFD300" opacity=".45"/></svg><span>Tap <b>outside</b> your lane → out</span></div>
+      <div class="krow"><svg class="tico" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="5" fill="#FFD300"/><circle cx="16" cy="16" r="10" fill="none" stroke="#FFD300" stroke-width="2" opacity=".6"/><circle cx="16" cy="16" r="14.5" fill="none" stroke="#FFD300" stroke-width="1.5" opacity=".3"/></svg><span><b>Hold</b> your finger down → boost</span></div>
+      <div class="krow"><svg class="tico" viewBox="0 0 32 32" aria-hidden="true"><rect x="1" y="10" width="9" height="12" rx="3" fill="none" stroke="#05D9E8" stroke-width="2"/><rect x="11.5" y="10" width="9" height="12" rx="3" fill="#FF2A6D" opacity=".85"/><rect x="22" y="10" width="9" height="12" rx="3" fill="none" stroke="#05D9E8" stroke-width="2"/></svg><span>Phones: <b>IN · BOOST · OUT</b> pad</span></div>
+    </div>
+  </div>
+  <p class="keys">2 Players: <span class="nw">P1 <kbd class="key sm">↑</kbd><kbd class="key sm">↓</kbd><kbd class="key sm wide">Space</kbd></span> · <span class="nw">P2 <kbd class="key sm">W</kbd><kbd class="key sm">S</kbd><kbd class="key sm wide">Shift</kbd></span></p>
   <div class="actions"><button class="btn primary" type="button" id="btnHelpOk">Got it — let’s drive</button></div>
 </div>
 <div id="live" class="sr" aria-live="polite"></div>
@@ -2184,6 +2212,8 @@ function render(alpha, t) {
 
 /* ================================== UI ================================== */
 const MODES = ['endless', 'levels', 'hunter'];
+const TOUCH = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;   // phones/tablets: talk about taps and the pad, not keys
+const orKey = k => TOUCH ? (k === 'in' ? ' (or press IN)' : ' (or press OUT)') : (k === 'in' ? ' (or press ↓)' : ' (or press ↑)');
 const Settings = Object.assign({ mode: 'endless', muted: false, rm: null, hc: false, hap: false }, Store.get('settings', {}) || {});
 const saveSettings = () => Store.set('settings', Settings);
 const App = {
@@ -2224,7 +2254,7 @@ const UI = {
   readyText() {
     const m = App.mode;
     let main = 'Tap to start', sub = 'Tap inside your lane to go in, outside to go out · hold for Overdrive';
-    if (m === 'endless') sub = 'Gets harder the longer you last · tap inside / outside your lane · hold to boost';
+    if (m === 'endless') sub = TOUCH ? 'Gets harder the longer you last · tap inside / outside your lane · hold to boost' : 'Gets harder the longer you last · ↓ in · ↑ out · hold Space to boost · or click inside / outside your lane';
     if (m === 'levels') { const L = LEVELS[App.lvl]; main = `${L.name} — tap to start`; sub = goalDesc(L.goal) + (L.fleet.length ? '' : ' · no crash cars yet, just learn to steer') + (App.S && App.S.gapOpen.some(d => d.some(o => !o)) ? ' · some doors are walled off' : ''); }
     if (m === 'hunter') { main = `Round ${App.hunter.round} of 2 — tap to start`; sub = `${App.hunter.round === 1 ? 'P1' : 'P2'} runs (bottom half · ↑ ↓ Space) — ${App.hunter.round === 1 ? 'P2' : 'P1'} hunts (top half · W S Shift)`; }
     this.el.ready.innerHTML = `${main}<small>${sub}</small>`; this.el.ready.hidden = false;
@@ -2272,7 +2302,7 @@ const Coach = { kind: null, inDone: false, outDone: false, tele: false, t0: 0, b
 function coachStart() {
   Object.assign(Coach, { kind: null, inDone: false, outDone: false, tele: false, t0: performance.now() / 1000, boostTip: false });
   UI.coach('');
-  if (App.mode === 'levels' && App.lvl === 0) { Coach.kind = 'warmup'; UI.coach('Tap INSIDE your lane — you’ll move in at the next glowing door'); }
+  if (App.mode === 'levels' && App.lvl === 0) { Coach.kind = 'warmup'; UI.coach('Tap INSIDE your lane' + orKey('in') + ' — you’ll move in at the next glowing door'); }
   else if ((App.mode === 'levels' && App.lvl === 1) || (App.mode === 'endless' && !Store.get('coachE', false))) {
     Coach.kind = 'rival'; UI.coach('A cyan car drives the other way — switch lanes before you meet it', 6);
     if (App.mode === 'endless') Store.set('coachE', true);
@@ -2283,8 +2313,8 @@ function coachEvent(S, e) {
   if (Coach.kind === 'warmup' && e.t === 'gap' && e.to !== e.from) {
     if (e.to < e.from) Coach.inDone = true; else Coach.outDone = true;
     if (Coach.inDone && Coach.outDone) { Coach.kind = 'warmup2'; Coach.t0 = performance.now() / 1000; UI.coach(`Great! Now grab the gold gems — ${S.goal.n} to finish`, 5); }
-    else if (Coach.inDone) UI.coach('Nice! Now tap OUTSIDE your lane to move back out');
-    else UI.coach('That was out. Now tap INSIDE your lane to move in');
+    else if (Coach.inDone) UI.coach('Nice! Now tap OUTSIDE your lane' + orKey('out') + ' to move back out');
+    else UI.coach('That was out. Now tap INSIDE your lane' + orKey('in') + ' to move in');
   }
   if (e.t === 'pass') UI.coach('PASS! Dodging at the last moment earns bonus points', 3);
 }

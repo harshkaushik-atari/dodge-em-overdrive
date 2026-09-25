@@ -11,6 +11,7 @@ A playable prototype of a modern, single-input remake of Dodge 'Em. It's one sel
 - **Hold** to boost with Overdrive. On phones you can also use the IN / BOOST / OUT pad.
 - Grab gold gems for points, and drive through power-up orbs: Shield, Magnet, Slow-mo, Double.
 - Keyboard: `↓` in · `↑` out · `Space` hold to boost · `P` pause.
+- 2 Players: P1 `↑` `↓` `Space` · P2 `W` `S` `Shift`.
 
 ## Modes
 
