@@ -3373,7 +3373,7 @@ function glProject(x, y, z, o = {}) {
 
 // ---- camera rigs ----
 function camChase(px, pz, yaw, od) {
-  const tall = V.H > V.W, d = (tall ? 168 : 150) - (od ? 14 : 0), h = tall ? 150 : 112, la = tall ? 150 : 165, cx = Math.cos(yaw), cz = Math.sin(yaw);   // a third-person chase: back and above the car
+  const tall = V.H > V.W, d = (tall ? 235 : 215) - (od ? 16 : 0), h = tall ? 245 : 158, la = tall ? 215 : 140, cx = Math.cos(yaw), cz = Math.sin(yaw);   // a third-person chase: back and above the car
   return { e: [px - cx * d, h, pz - cz * d], t: [px + cx * la, 6, pz + cz * la], fov: od ? 66 : 60 };
 }
 function camOrbit(t, R, h, cx = 0, cz = 0, sp = .1) { const a = t * sp; return { e: [cx + Math.cos(a) * R, h, cz + Math.sin(a) * R], t: [cx, 0, cz], fov: 50 }; }
