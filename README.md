@@ -17,7 +17,7 @@ A playable prototype of a modern, single-input remake of Dodge 'Em. It's one sel
 
 - **Endless:** starts easy and climbs Easy → Medium → Difficult → Hell. The track reshapes at every level-up.
 - **Levels:** 12 goals (gems, survive, clear every lane, dodges), each on a fresh random track.
-- **2 Players:** local hunter vs. runner, with 60-second rounds and swapped roles.
+- **2 Players:** local hunter vs. runner, with 60-second rounds and swapped roles. Desktop only, since both players share one keyboard.
 
 ## Running locally
 

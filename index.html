@@ -2211,8 +2211,8 @@ function render(alpha, t) {
 }
 
 /* ================================== UI ================================== */
-const MODES = ['endless', 'levels', 'hunter'];
 const TOUCH = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;   // phones/tablets: talk about taps and the pad, not keys
+const MODES = TOUCH ? ['endless', 'levels'] : ['endless', 'levels', 'hunter'];   // 2 Players shares one keyboard, so it's desktop-only
 const orKey = k => TOUCH ? (k === 'in' ? ' (or press IN)' : ' (or press OUT)') : (k === 'in' ? ' (or press ↓)' : ' (or press ↑)');
 const Settings = Object.assign({ mode: 'endless', muted: false, rm: null, hc: false, hap: false }, Store.get('settings', {}) || {});
 const saveSettings = () => Store.set('settings', Settings);
@@ -2768,6 +2768,10 @@ function boot() {
   mkSprites();
 
   const E = UI.el;
+  if (TOUCH) {   // no 2 Players on phones/tablets: drop its chip and its keys line in How to play
+    const c = E.modeChips.querySelector('[data-v="hunter"]'); if (c) c.remove();
+    const k = document.querySelector('#helpCard .keys'); if (k) k.remove();
+  }
   document.addEventListener('pointerdown', onDocDown, true);
   E.wrap.addEventListener('pointerdown', onBoardDown);
   window.addEventListener('pointerup', onUp);
